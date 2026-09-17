@@ -109,7 +109,7 @@
 已按需求精简到 **84 个包**（原 120 个；这里数的"个"= `Config/R5C.txt` + `Config/GENERAL.txt`
 里明确勾选的包，上一个版本是 89）。移除的：官方主题、在线升级、硬盘休眠、
 RTL8822CE 网卡驱动与固件、SmartDNS 与 DoH 代理、官方 DDNS/UPnP/WOL/SQM、
-PBR/OpenVPN/WireGuard、网页终端（ttyd）、网页文件管理、自定义命令、中断均衡（irqbalance）、
+PBR/OpenVPN/WireGuard、网页终端页面（luci-app-ttyd）、网页文件管理、自定义命令、中断均衡（irqbalance）、
 Tailscale。下面列的是保留下来的：
 
 - **LuCI**：`luci`、`luci-ssl`(HTTPS)、简体中文、**Argon 主题 + 设置面板（第三方，唯一主题）**、`luci-app-firewall`、`luci-app-package-manager`、`luci-app-nlbwmon`（流量统计，菜单被挪到**网络 → 带宽监控**）
@@ -188,7 +188,7 @@ HomeProxy 的 DNS 是 sing-box 内置的（默认用 nft 把 53 劫持到 `infra
 | Ruby YJIT（会连带从源码编译 rust 编译器） | 默认打开，单这一步就 3 小时以上，最后被 6 小时上限硬杀 | **已随 OpenClash 一起消失**（固件里不再有依赖 ruby 的包），只在 TEST 阶段留了一道拦截 |
 | 第三方主题兜底 | 装了 `luci-theme-openwrt-2020` | 按需求移除，Argon 是唯一主题 |
 | 网卡驱动 | RTL8822CE + MT7921 两套 | 只留 MT7921（用设备包移除机制摘掉 RTL8822CE） |
-| 网页终端 / 文件管理 / 自定义命令 / 中断均衡 | 都装了 | 按需求移除（都只是 LuCI 页面，删掉不影响功能；要 SSH 用系统的 dropbear） |
+| 网页终端页面 / 文件管理 / 自定义命令 / 中断均衡 | 都装了 | 按需求移除（都只是 LuCI 页面，删掉不影响功能；要 SSH 用系统的 dropbear）。注意 `ttyd` 二进制**留着**：`luci-app-dockerman` 的 Makefile 里是 `+ttyd`，容器终端靠它 |
 | Tailscale 异地组网 | 装了 | 按需求移除 |
 | SMB / FTP 文件共享 | 原来删掉了 | 按需求装回来：官方 `samba4-server` + `vsftpd`，共享 `/opt/files` |
 | eMMC 剩余空间 | 自己 `parted` + `mkfs` 手动分区，再挂到 `/mnt/data` 或 `/opt` | **首次开机自动**分区（卷标 `docker`）→ 挂到 `/opt` → 直接给 Docker 用 |
@@ -317,6 +317,9 @@ Actions 页面选择 **R5C** workflow → Run workflow：
   先跑 `Scripts/Packages.sh` 拉第三方插件，再 `cp Config/R5C.txt Config/GENERAL.txt .config` 并 `make defconfig`。
 - 安全说明：原脚本会把 ttyd 改成免密自动 root 登录（等于局域网 root 后门），本版本已移除；
   同时把 `wpad-basic-mbedtls` 换成 `wpad-openssl`，支持 WPA3-SAE / 802.11r / OWE。
+  网页终端页面（`luci-app-ttyd`）也删了，但 `ttyd` 二进制保留 —— `luci-app-dockerman` 的
+  Makefile 里写死 `+ttyd`（页面之外的容器终端功能依赖它），所以「服务 → 终端」不再出现在菜单里，
+  只是少了这个页面，不是少了 ttyd 本体。
 - 「开箱可用」的取舍：SMB 默认是**访客可读写**（官方模板里 `invalid users = root`，
   SMB 没法用 root 登录，访客是最省事的默认值；只对内网，WAN 被防火墙挡着）。
   FTP / SSH 要 root 密码才能登录，而固件默认密码为空 —— 想刷完就登得进去，把 `R5C.yml`

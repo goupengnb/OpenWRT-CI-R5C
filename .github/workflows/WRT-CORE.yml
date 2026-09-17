@@ -274,6 +274,9 @@ jobs:
           #反向检查：明确要求【不要】的包，不能被别的依赖又拉回来。
           #make defconfig 会把依赖不满足的包丢掉，但反过来"被依赖拉进来"是静默的：
           #一旦拉回来，固件就白胖了，而且这种问题肉眼很难发现，所以在这里卡死。
+          #注：ttyd（二进制）故意不在这个清单里 —— luci-app-dockerman 的 Makefile 写死 +ttyd，
+          #它的 docker_rpc.uc 就是调 ttyd 在网页里进容器终端的；拦掉 ttyd 会把 dockerman 一起拖下水。
+          #所以这里只拦「网页终端」那个 LuCI 页面（luci-app-ttyd），二进制留着给 Dockerman 用。
           FORBIDDEN="
           CONFIG_PACKAGE_luci-theme-openwrt-2020
           CONFIG_PACKAGE_luci-app-attendedsysupgrade
@@ -293,7 +296,6 @@ jobs:
           CONFIG_PACKAGE_rtl8822ce-firmware
           CONFIG_PACKAGE_kmod-wireguard
           CONFIG_PACKAGE_luci-app-ttyd
-          CONFIG_PACKAGE_ttyd
           CONFIG_PACKAGE_luci-app-filemanager
           CONFIG_PACKAGE_luci-app-commands
           CONFIG_PACKAGE_luci-app-irqbalance

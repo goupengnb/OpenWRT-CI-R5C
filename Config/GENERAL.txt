@@ -33,9 +33,11 @@ CONFIG_PACKAGE_luci-app-package-manager=y
 CONFIG_PACKAGE_luci-app-nlbwmon=y
 CONFIG_PACKAGE_nlbwmon=y
 #按需求去掉的四个（都已同步进 WRT-CORE.yml 的 FORBIDDEN 反向检查）：
-#  网页终端 luci-app-ttyd + ttyd、网页文件管理 luci-app-filemanager、自定义命令 luci-app-commands
+#  网页终端 luci-app-ttyd、网页文件管理 luci-app-filemanager、自定义命令 luci-app-commands
 #    —— 三个都只是 LuCI 页面（只依赖 luci-base），删掉不影响任何功能；
 #       要进 SSH 用系统的 dropbear（默认就是开的），不必再留一个挂在网页上的终端。
+#    注意 ttyd 这个【二进制】没删：luci-app-dockerman 的 Makefile 写死 +ttyd，
+#    它的容器终端（docker_rpc.uc）就是调 ttyd 实现的，删了 Dockerman 也没法用。
 #  中断均衡 luci-app-irqbalance + irqbalance —— 4 核 A55 上收益很小，还会跟网络软中断抢 CPU。
 
 #---------- 系统工具 ----------
