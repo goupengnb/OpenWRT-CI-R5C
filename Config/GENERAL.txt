@@ -29,16 +29,14 @@ CONFIG_PACKAGE_luci-app-argon-config=y
 #    Argon 是唯一主题，靠 Scripts/Settings.sh 把 luci 集合里的 theme-bootstrap 换成它。
 CONFIG_PACKAGE_luci-app-firewall=y
 CONFIG_PACKAGE_luci-app-package-manager=y
-#网页终端 / 网页文件管理 / 自定义命令
-CONFIG_PACKAGE_luci-app-ttyd=y
-CONFIG_PACKAGE_ttyd=y
-CONFIG_PACKAGE_luci-app-filemanager=y
-CONFIG_PACKAGE_luci-app-commands=y
-#流量统计 / 中断均衡
+#流量统计 / 带宽监控（菜单由 Scripts/Settings.sh 从「服务」挪到「网络」下）
 CONFIG_PACKAGE_luci-app-nlbwmon=y
 CONFIG_PACKAGE_nlbwmon=y
-CONFIG_PACKAGE_luci-app-irqbalance=y
-CONFIG_PACKAGE_irqbalance=y
+#按需求去掉的四个（都已同步进 WRT-CORE.yml 的 FORBIDDEN 反向检查）：
+#  网页终端 luci-app-ttyd + ttyd、网页文件管理 luci-app-filemanager、自定义命令 luci-app-commands
+#    —— 三个都只是 LuCI 页面（只依赖 luci-base），删掉不影响任何功能；
+#       要进 SSH 用系统的 dropbear（默认就是开的），不必再留一个挂在网页上的终端。
+#  中断均衡 luci-app-irqbalance + irqbalance —— 4 核 A55 上收益很小，还会跟网络软中断抢 CPU。
 
 #---------- 系统工具 ----------
 CONFIG_PACKAGE_bash=y
@@ -117,6 +115,18 @@ CONFIG_PACKAGE_ddns-go=y
 CONFIG_PACKAGE_luci-app-ddns-go=y
 #按需求去掉了 UPnP、网络唤醒（WOL）和 SQM 智能队列。
 
+#---------- 文件共享（SMB / FTP）----------
+#SMB：官方 samba4-server + 官方 luci-app-samba4 面板。
+#  默认共享 /opt/files（就是 eMMC 剩余空间那块盘，见 Scripts/Settings.sh 的 docker-storage），
+#  访客可读写、只对内网（WAN 由防火墙挡着，没有对外开放）。
+#  注意：官方模板里写死了 invalid users = root，所以 root 不能登录 SMB；
+#  要用账号密码就自己 adduser + smbpasswd -a，再把共享里的"允许访客"关掉。
+CONFIG_PACKAGE_samba4-server=y
+CONFIG_PACKAGE_luci-app-samba4=y
+#FTP：官方 vsftpd。官方 feed 里没有 FTP 的 LuCI 面板，默认值直接写进 /etc/vsftpd.conf
+#  （见 Scripts/Handles.sh：local_root=/opt/files + allow_writeable_chroot=YES）。
+CONFIG_PACKAGE_vsftpd=y
+
 #---------- 代理 / 分流 ----------
 #第三方：HomeProxy（官方 feed 没有；ImmortalWrt 官方团队维护，sing-box 内核）
 #它的 Makefile 已经声明了 sing-box / firewall4 / kmod-nft-tproxy / ucode-mod-digest，会自动带进来。
@@ -131,9 +141,9 @@ CONFIG_PACKAGE_ucode-mod-math=y
 #官方包没声明这两个依赖，体积很小，显式补上
 CONFIG_PACKAGE_coreutils-nohup=y
 CONFIG_PACKAGE_coreutils-timeout=y
-#Tailscale 异地组网（luci-app-tailscale-community 也在官方 luci 仓库里）
-CONFIG_PACKAGE_tailscale=y
-CONFIG_PACKAGE_luci-app-tailscale-community=y
+#按需求去掉了 Tailscale 异地组网（tailscale + luci-app-tailscale-community）：
+#  它是"把自己的设备接进第三方虚拟局域网"，本机不需要；要异地访问内网，
+#  用 HomeProxy 的节点或者 WireGuard 更直接，也少一份常驻进程。
 #按需求去掉了 PBR 策略路由、OpenVPN、WireGuard：代理只留 HomeProxy 一套。
 #（R5C.txt 里的 kmod-wireguard 也一并去掉了，不留没用的内核模块）
 #透明代理 / 分流需要的内核 nft 扩展

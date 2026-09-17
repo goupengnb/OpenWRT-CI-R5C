@@ -46,7 +46,9 @@ jobs:
       WRT_WORD: 12345678
       #默认地址
       WRT_IP: 192.168.1.1
-      #默认密码，仅作提示，修改无用
+      #默认 root 密码：Scripts/Settings.sh 会用它生成 sha512 哈希写进固件的 /etc/shadow
+      #填「无」= 空密码（此时 dropbear / vsftpd 会拒绝登录，SSH/FTP 服务开着也进不去）；
+      #填一个密码，刷完就能直接 SSH / FTP 登录（但公开仓库里等于把密码公开，自己权衡）
       WRT_PW: 无
       #源码链接（OpenWrt 官方）
       WRT_REPO: https://github.com/openwrt/openwrt.git

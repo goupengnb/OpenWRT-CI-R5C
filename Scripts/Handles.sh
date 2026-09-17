@@ -31,6 +31,30 @@ else
 	echo "warning: homeproxy package not found, skip uci-defaults"
 fi
 
+#=========vsftpd：默认锁在 /opt/files=========
+#官方包的 /etc/vsftpd.conf 里没有 local_root，root 登录后会落在 /root 并能翻遍整个文件系统；
+#而 vsftpd 从 3.0 起会拒绝"chroot 目录对登录用户可写"的情况：
+#    500 OOPS: vsftpd: refusing to run with writable root inside chroot()
+#所以要把登录目录指到共享目录，并显式放行可写的 chroot。
+#注意 /etc/config/vsftpd 默认带着 option conf_file '/etc/vsftpd.conf'，init 脚本会优先用这个
+#静态文件（uci 里那些选项就不生效了），所以直接改它最直接、也最不容易误解。
+VSF_CONF=$(find "$PKG_PATH/feeds" -maxdepth 6 -type f -path "*vsftpd/files/vsftpd.conf" 2>/dev/null | head -n 1)
+if [ -n "$VSF_CONF" ]; then
+	if grep -q '^local_root=' "$VSF_CONF"; then
+		echo "vsftpd: /etc/vsftpd.conf 已经改过，跳过"
+	else
+		cat >> "$VSF_CONF" <<'EOF'
+
+#以下两行由本仓库的 Scripts/Handles.sh 追加：登录后锁在共享目录，并允许该目录本身可写
+local_root=/opt/files
+allow_writeable_chroot=YES
+EOF
+		echo "vsftpd: 默认 local_root=/opt/files（并允许 chroot 目录可写）"
+	fi
+else
+	echo "warning: vsftpd package not found, skip conf patch"
+fi
+
 #=========AdGuardHome=========
 #已改用官方 packages 源的 adguardhome + luci-app-adguardhome，
 #内核由官方包自己从 AdGuardTeam/AdGuardHome 拉源码编译，不需要额外预置。
