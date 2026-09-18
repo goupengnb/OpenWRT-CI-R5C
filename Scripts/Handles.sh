@@ -38,7 +38,10 @@ fi
 #所以要把登录目录指到共享目录，并显式放行可写的 chroot。
 #注意 /etc/config/vsftpd 默认带着 option conf_file '/etc/vsftpd.conf'，init 脚本会优先用这个
 #静态文件（uci 里那些选项就不生效了），所以直接改它最直接、也最不容易误解。
-VSF_CONF=$(find "$PKG_PATH/feeds" -maxdepth 6 -type f -path "*vsftpd/files/vsftpd.conf" 2>/dev/null | head -n 1)
+#feeds 里的包在 package/feeds/<feed>/<包名> 下只是一个【符号链接】（指向 ../../feeds/.../<包名>），
+#而 find 默认【不跟符号链接】、-type f 也匹配不到，所以必须显式加 -L；顺便把真正的 feeds 源码树也搜一遍。
+#（之前这里没加 -L，导致这个补丁从来没生效过，构建日志里只有一行 warning，很容易漏看。）
+VSF_CONF=$(find -L "$PKG_PATH" "$PKG_PATH/../feeds" -maxdepth 8 -type f -path "*vsftpd/files/vsftpd.conf" 2>/dev/null | head -n 1)
 if [ -n "$VSF_CONF" ]; then
 	if grep -q '^local_root=' "$VSF_CONF"; then
 		echo "vsftpd: /etc/vsftpd.conf 已经改过，跳过"
@@ -60,7 +63,10 @@ EOF
 		echo "vsftpd: 默认 local_root=/opt/files（允许 chroot 目录可写 + 关闭 seccomp 沙箱）"
 	fi
 else
-	echo "warning: vsftpd package not found, skip conf patch"
+	#这里【故意】直接失败：找不到配置文件就等于 FTP 的默认值（登录目录 / seccomp）全都没生效，
+	#而默认值失效在编译期是完全静默的，只有刷完登录才 500。宁可 TEST 阶段就炸出来。
+	echo "::error::没找到 feeds 里的 vsftpd（feeds/packages/net/vsftpd/files/vsftpd.conf），FTP 默认值会失效，已中止"
+	exit 1
 fi
 
 #=========AdGuardHome=========
