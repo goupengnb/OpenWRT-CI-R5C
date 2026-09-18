@@ -35,7 +35,8 @@
   - 管理地址：`192.168.1.1`
   - WiFi：`狗鹏` / `12345678`（地区 CN，`psk2+ccmp`，**首次开机即启用**）
   - SSH：`dropbear`，22 端口，**默认开启**（`/etc/config/dropbear` 就是 enable=1 + 密码登录=开）
-  - SMB / FTP：**默认开启**，都指向 `/opt/files`；SMB 访客可读写，FTP 用 root 登录
+  - SMB / FTP：**默认开启**，都指向 `/opt/files`；SMB 访客可读写（只有服务端，没有 LuCI 面板），
+    FTP 用 root 登录
   - 登录密码：无（买来是新机器，第一次进 LuCI 请自己设置密码）
   - 注意：root 密码为空时 dropbear / vsftpd 会**拒绝登录**（服务开着但进不去）。
     要"刷完就能 SSH / FTP 登录"，把 `R5C.yml` 里的 `WRT_PW` 从 `无` 改成一个密码再重编一次，
@@ -81,8 +82,9 @@
 - 分区表是**在线生效**的：parted 3.x 用 BLKPG ioctl 把新分区同步给内核
   （libparted/arch/linux.c 的 `_disk_sync_part_table`），不用重启，也不必先卸载 overlay。
 - 脚本幂等：以后每次开机只按卷标找盘、没挂就挂上；已经手动分过区就什么都不做。
-- **SMB**：官方 `samba4-server` + 官方 `luci-app-samba4` 面板（菜单「网络 → 网络共享」），
+- **SMB**：官方 `samba4-server`（按需求**不装** `luci-app-samba4` 面板，LuCI 里没有「网络共享」菜单），
   默认共享 `files` → `/opt/files`，访客可读写、只对内网（WAN 由防火墙挡着）。
+  共享由 `Scripts/Settings.sh` 的 uci-defaults 首次开机写好，以后要改直接编辑 `/etc/config/samba4`。
   官方模板里写死了 `invalid users = root`，所以 SMB **不能**用 root 登录；
   要用账号密码就 `adduser` + `smbpasswd -a` 建个用户，再把共享里的"允许访客"关掉。
 - **FTP**：官方 `vsftpd`，用 root + 系统密码登录，登录后锁在 `/opt/files`。
@@ -98,7 +100,6 @@
 | --- | --- | --- | --- |
 | `luci-theme-argon`、`luci-app-argon-config` | [jerrykuku/luci-theme-argon](https://github.com/jerrykuku/luci-theme-argon)、[luci-app-argon-config](https://github.com/jerrykuku/luci-app-argon-config) | `master` | Argon 主题原作者，2026-09 仍在提交；主题 2.4.7、设置面板 1.0 |
 | `luci-app-homeproxy` | [immortalwrt/homeproxy](https://github.com/immortalwrt/homeproxy) | `master` | 官方 feed 无；ImmortalWrt 官方团队维护；内核是**官方 feed 里的 `sing-box`**（25.12 是 1.13.x），固件里不带任何第三方二进制 |
-| `luci-app-diskman` | [sbwml/luci-app-diskman](https://github.com/sbwml/luci-app-diskman) | `main` | 官方 feed 无；作者重写的 1.0.0 版（ucode 实现，适配 25.12/apk） |
 | `luci-app-ddns-go`、`ddns-go` | [sirpdboy/luci-app-ddns-go](https://github.com/sirpdboy/luci-app-ddns-go) | `main` | 官方 feed 无；原作者仍在维护 |
 
 **其余插件全部来自 OpenWrt 官方 feeds。** 其中 AdGuard Home 官方源已经有官方维护的
@@ -106,18 +107,20 @@
 
 # 插件清单
 
-已按需求精简到 **84 个包**（原 120 个；这里数的"个"= `Config/R5C.txt` + `Config/GENERAL.txt`
-里明确勾选的包，上一个版本是 89）。移除的：官方主题、在线升级、硬盘休眠、
+已按需求精简到 **81 个包**（原 120 个；这里数的"个"= `Config/R5C.txt` + `Config/GENERAL.txt`
+里明确勾选的包，上一个版本是 84）。移除的：官方主题、在线升级、硬盘休眠（含 `hdparm`）、
 RTL8822CE 网卡驱动与固件、SmartDNS 与 DoH 代理、官方 DDNS/UPnP/WOL/SQM、
 PBR/OpenVPN/WireGuard、网页终端页面（luci-app-ttyd）、网页文件管理、自定义命令、中断均衡（irqbalance）、
-Tailscale。下面列的是保留下来的：
+Tailscale、第三方 DiskMan 磁盘管理面板、SMB 的 LuCI 面板（luci-app-samba4）。
+下面列的是保留下来的：
 
 - **LuCI**：`luci`、`luci-ssl`(HTTPS)、简体中文、**Argon 主题 + 设置面板（第三方，唯一主题）**、`luci-app-firewall`、`luci-app-package-manager`、`luci-app-nlbwmon`（流量统计，菜单被挪到**网络 → 带宽监控**）
 - **系统工具**：bash、nano、htop、curl、wget-ssl、rsync、ca-certificates、openssl-util、ip-full、ethtool、pciutils（lspci 看 M.2 网卡）、usbutils、iperf3、tcpdump、openssh-keygen、openssh-sftp-server、zoneinfo-core/asia
-- **存储 / USB**：block-mount、blkid、lsblk、fdisk、sfdisk、parted、e2fsprogs、dosfstools、f2fs-tools、btrfs-progs、wipefs、xfs-mkfs、swap-utils、**DiskMan 磁盘管理面板（第三方）**、kmod-fs-vfat/exfat/ntfs3/btrfs/cifs、cifsmount、exfat-mkfs/fsck、kmod-usb-storage(+uas)、kmod-usb-net-rtl8152（USB 2.5G 网卡）、smartmontools、hdparm
+- **存储 / USB**：block-mount、blkid、lsblk、fdisk、sfdisk、parted、e2fsprogs、dosfstools、f2fs-tools、btrfs-progs、wipefs、xfs-mkfs、swap-utils、kmod-fs-vfat/exfat/ntfs3/btrfs/cifs、cifsmount、exfat-mkfs/fsck、kmod-usb-storage(+uas)、kmod-usb-net-rtl8152（USB 2.5G 网卡）、smartmontools
 - **DNS**：`dnsmasq-full`（系统基础解析 + DHCP，唯一对外解析器）、AdGuard Home（`adguardhome` + `luci-app-adguardhome`，**官方源版本**）
 - **网络服务**：**ddns-go + luci-app-ddns-go（第三方）**
-- **文件共享**：**SMB（官方 `samba4-server` + `luci-app-samba4`，共享 `files` → `/opt/files`）**、**FTP（官方 `vsftpd`，锁在 `/opt/files`）**
+- **文件共享**：**SMB**（官方 `samba4-server` 服务本体，**不带 LuCI 面板**，共享 `files` → `/opt/files`）、
+  **FTP**（官方 `vsftpd`，锁在 `/opt/files`）
 - **代理 / 分流**：**HomeProxy（第三方面板 + 官方 feed 的 `sing-box` 内核）**、`ucode-mod-math`（HomeProxy 要用但上游 Makefile 没声明，这里显式补上）
 - **Docker**：`luci-app-dockerman` + `dockerd` + `docker` + `docker-compose`；数据目录 `/opt/docker`，落在 eMMC 剩余空间那块盘上（见「存储与共享」）
 - **内核/网络加速**：`kmod-tcp-bbr`（BBR 拥塞控制）+ 内核打开 `sch_fq` 队列并把默认队列设为 `fq`（`Scripts/Settings.sh` 给 rockchip 内核配置补一行，同时写入 `/etc/sysctl.d/13-default-qdisc.conf`；上游没有对应的 kmod 包）、`kmod-veth`、`kmod-br-netfilter`、`kmod-tun`、`kmod-nf-nat6`、`kmod-nft-tproxy/socket/fib`、`wpad-openssl`。网卡只保留 **MT7921**（RTL8822CE 的驱动和固件已从设备默认包里一并移除）
@@ -176,7 +179,7 @@ HomeProxy 的 DNS 是 sing-box 内置的（默认用 nft 把 53 劫持到 `infra
 | 主题 | Argon（sbwml 的 fork） | Argon（**原作者 jerrykuku** 的仓库） |
 | 代理 / 分流 | OpenClash（vernesong `dev`，自带 mihomo 内核） | **HomeProxy**（immortalwrt `master`），内核换成官方 feed 里的 `sing-box` |
 | AdGuardHome | 魔改版 `goupengnb/luci-app-adguardhome` | 官方 `adguardhome` + `luci-app-adguardhome` |
-| DiskMan | sbwml fork | sbwml 重写的 1.0.0 版（作者本人维护） |
+| DiskMan 磁盘管理面板 | sbwml fork | 按需求**移除**（官方 feed 没有此面板；分区/格式化用 `fdisk` / `parted` / `mkfs.*`） |
 | ddns-go | sirpdboy | 同左 |
 | `autocore`、`cpufreq` | immortalwrt 专有包 | 官方源没有，删除 |
 | `opkg` / `opkg-conf` | 有 | 25.12 已改用 apk，删除 |
@@ -190,10 +193,10 @@ HomeProxy 的 DNS 是 sing-box 内置的（默认用 nft 把 53 劫持到 `infra
 | 网卡驱动 | RTL8822CE + MT7921 两套 | 只留 MT7921（用设备包移除机制摘掉 RTL8822CE） |
 | 网页终端页面 / 文件管理 / 自定义命令 / 中断均衡 | 都装了 | 按需求移除（都只是 LuCI 页面，删掉不影响功能；要 SSH 用系统的 dropbear）。注意 `ttyd` 二进制**留着**：`luci-app-dockerman` 的 Makefile 里是 `+ttyd`，容器终端靠它 |
 | Tailscale 异地组网 | 装了 | 按需求移除 |
-| SMB / FTP 文件共享 | 原来删掉了 | 按需求装回来：官方 `samba4-server` + `vsftpd`，共享 `/opt/files` |
+| SMB / FTP 文件共享 | 原来删掉了 | 按需求装回来：官方 `samba4-server` + `vsftpd`，共享 `/opt/files`；SMB 的 LuCI 面板按需求**移除**（只留服务，菜单里不再出现「网络共享」） |
 | eMMC 剩余空间 | 自己 `parted` + `mkfs` 手动分区，再挂到 `/mnt/data` 或 `/opt` | **首次开机自动**分区（卷标 `docker`）→ 挂到 `/opt` → 直接给 Docker 用 |
 | 带宽监控菜单位置 | 服务 → 带宽监控 | **网络 → 带宽监控**（`Scripts/Settings.sh` 改 menu.d 与页面里的硬编码链接） |
-| 插件总量 | 120 个 | **84 个**（只留设备和用途上必需的） |
+| 插件总量 | 120 个 | **81 个**（只留设备和用途上必需的） |
 
 # 编译耗时与「Ruby YJIT」这个坑
 
@@ -263,7 +266,7 @@ CONFIG_TARGET_DEVICE_PACKAGES_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5c="-wpa
 - `Scripts/Settings.sh` —— 系统级修改与默认值：主题、默认主机名/IP、默认 WiFi、内核 `sch_fq`、
   带宽监控菜单挪到「网络」、`/etc/init.d/docker-storage`（eMMC 剩余空间 → `/opt` → Docker）、
   SMB/FTP 的 uci-defaults、可选的默认 root 密码（`WRT_PW`）
-- `Scripts/Packages.sh` —— 从第三方仓库拉取**官方 feed 里没有**的插件（argon / HomeProxy / DiskMan / ddns-go）
+- `Scripts/Packages.sh` —— 从第三方仓库拉取**官方 feed 里没有**的插件（argon / HomeProxy / ddns-go）
 - `Scripts/Handles.sh` —— 改第三方包自带文件的默认值：往 HomeProxy 包里塞
   `/etc/uci-defaults/zz-homeproxy-lan-proxy`（首次开机把 `lan_proxy_mode` 设成 `except_listed`）、
   给 vsftpd 的 `/etc/vsftpd.conf` 追加 `local_root=/opt/files` + `allow_writeable_chroot=YES`
@@ -306,7 +309,7 @@ Actions 页面选择 **R5C** workflow → Run workflow：
 编译流程里加了一步 **Verify Key Packages**：`make defconfig` 会把依赖不满足的包**静默丢掉**，
 这一步会逐个检查关键插件是否真的进了 `.config`，缺了就中止编译，避免编出一个「看着正常但少了插件」的固件。
 
-反过来还查一遍**被要求删除的包有没有被依赖偷偷拉回来**（比如某个插件依赖了 Samba）。
+反过来还查一遍**被要求删除的包有没有被依赖偷偷拉回来**（比如某个插件依赖了 DiskMan）。
 `make defconfig` 只会静默丢掉依赖不满足的包，但「被依赖拉进来」是静默的，不查的话固件会白胖，
 所以这里也卡死。
 

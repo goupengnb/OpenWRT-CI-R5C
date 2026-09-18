@@ -8,7 +8,6 @@
 # 官方 feed 里不存在的第三方插件（已逐个在 25.12.5 官方索引里确认）：
 #   luci-theme-argon / luci-app-argon-config   ← jerrykuku（原作者，持续更新）
 #   luci-app-homeproxy                         ← immortalwrt（ImmortalWrt 官方团队，sing-box 内核）
-#   luci-app-diskman                           ← sbwml（1.0.0 重写版，作者本人维护）
 #   luci-app-ddns-go + ddns-go                 ← sirpdboy（原作者，持续更新）
 #
 # 本文件里其余插件名都已在 25.12.5 官方索引里逐个核对过
@@ -74,7 +73,7 @@ CONFIG_PACKAGE_e2fsprogs=y
 CONFIG_PACKAGE_dosfstools=y
 CONFIG_PACKAGE_f2fs-tools=y
 CONFIG_PACKAGE_btrfs-progs=y
-#DiskMan 的依赖（wipefs / xfs-mkfs / swap-utils）都会被自动拉进来
+#分区/格式化的收尾工具：wipefs 清旧签名、xfs-mkfs 建 XFS、swap-utils 管 swap
 CONFIG_PACKAGE_wipefs=y
 CONFIG_PACKAGE_xfs-mkfs=y
 CONFIG_PACKAGE_swap-utils=y
@@ -94,9 +93,10 @@ CONFIG_PACKAGE_kmod-usb-storage-uas=y
 #USB 2.5G 网卡（RTL8152/8153/8156）备用
 CONFIG_PACKAGE_kmod-usb-net-rtl8152=y
 CONFIG_PACKAGE_smartmontools=y
-CONFIG_PACKAGE_hdparm=y
-#第三方：官方没有磁盘管理面板
-CONFIG_PACKAGE_luci-app-diskman=y
+#按需求去掉的两个：
+#  hdparm —— 磁盘参数/休眠，本机不需要（看盘的健康状态有 smartmontools 就够）；
+#  luci-app-diskman（第三方）—— 官方 feed 里没有磁盘管理面板，按需求也不装这个第三方面板，
+#    分区/格式化直接用 fdisk / parted / mkfs.* 命令行。
 
 #---------- DNS（只留 AdGuard Home）----------
 #dnsmasq-full：带 DNSSEC / nftset 的完整版，替换官方默认的精简 dnsmasq。
@@ -118,13 +118,14 @@ CONFIG_PACKAGE_luci-app-ddns-go=y
 #按需求去掉了 UPnP、网络唤醒（WOL）和 SQM 智能队列。
 
 #---------- 文件共享（SMB / FTP）----------
-#SMB：官方 samba4-server + 官方 luci-app-samba4 面板。
+#SMB：只装官方 samba4-server 服务本体，不装 luci-app-samba4 面板（按需求，
+#  所以 LuCI 里不会再有「网络共享」菜单）。共享由 Scripts/Settings.sh 的 uci-defaults
+#  首次开机写好，以后要改直接编辑 /etc/config/samba4。
 #  默认共享 /opt/files（就是 eMMC 剩余空间那块盘，见 Scripts/Settings.sh 的 docker-storage），
 #  访客可读写、只对内网（WAN 由防火墙挡着，没有对外开放）。
 #  注意：官方模板里写死了 invalid users = root，所以 root 不能登录 SMB；
 #  要用账号密码就自己 adduser + smbpasswd -a，再把共享里的"允许访客"关掉。
 CONFIG_PACKAGE_samba4-server=y
-CONFIG_PACKAGE_luci-app-samba4=y
 #FTP：官方 vsftpd。官方 feed 里没有 FTP 的 LuCI 面板，默认值直接写进 /etc/vsftpd.conf
 #  （见 Scripts/Handles.sh：local_root=/opt/files + allow_writeable_chroot=YES）。
 CONFIG_PACKAGE_vsftpd=y

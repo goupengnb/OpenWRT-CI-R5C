@@ -307,14 +307,15 @@ EOF
 chmod 0755 "$DOCKER_STORAGE"
 
 #==========SMB / FTP 开箱可用==========
-#SMB 用官方 samba4（luci-app-samba4 面板），FTP 用官方 vsftpd。
+#SMB 用官方 samba4-server（按需求不装 luci-app-samba4 面板，LuCI 里没有共享页面），
+#FTP 用官方 vsftpd。
 #samba4 自带的 /etc/config/samba4 里只有一个注释掉的示例共享，这里塞一个 uci-defaults
 #（首次开机由 /etc/init.d/boot 跑一次），把共享 name=files → /opt/files 建出来：
 #  /opt/files 就是 docker-storage 挂上来的那块大盘，所以 SMB/FTP/Docker 共用同一个空间。
 #访客可读写（guest_ok/guest_only=yes + force_root=1）：因为 samba4 的模板里写死了
 #  invalid users = root，root 根本登录不了 SMB；而且刚装好的固件 root 密码是空的，
 #  dropbear / vsftpd 同样会拒绝空密码登录。要账号密码访问就自己 adduser + smbpasswd -a，
-#  再把共享的 guest_ok 关掉（这些都能在 LuCI 的「网络 - 网络共享」里改）。
+#  再把共享的 guest_ok 关掉（没有 LuCI 面板，直接改 /etc/config/samba4）。
 FILE_SHARING="./package/base-files/files/etc/uci-defaults/zz-file-sharing"
 mkdir -p "$(dirname "$FILE_SHARING")"
 cat > "$FILE_SHARING" <<'EOF'

@@ -210,13 +210,11 @@ jobs:
           CONFIG_PACKAGE_luci-app-homeproxy
           CONFIG_PACKAGE_sing-box
           CONFIG_PACKAGE_ucode-mod-math
-          CONFIG_PACKAGE_luci-app-diskman
           CONFIG_PACKAGE_ddns-go
           CONFIG_PACKAGE_luci-app-ddns-go
           CONFIG_PACKAGE_luci-app-dockerman
           CONFIG_PACKAGE_luci-app-nlbwmon
           CONFIG_PACKAGE_samba4-server
-          CONFIG_PACKAGE_luci-app-samba4
           CONFIG_PACKAGE_vsftpd
           "
           MISSING=0
@@ -277,6 +275,8 @@ jobs:
           #注：ttyd（二进制）故意不在这个清单里 —— luci-app-dockerman 的 Makefile 写死 +ttyd，
           #它的 docker_rpc.uc 就是调 ttyd 在网页里进容器终端的；拦掉 ttyd 会把 dockerman 一起拖下水。
           #所以这里只拦「网页终端」那个 LuCI 页面（luci-app-ttyd），二进制留着给 Dockerman 用。
+          #末尾三个是 2026-09 按需求新移除的：第三方磁盘面板 DiskMan、SMB 的 LuCI 面板、
+          #磁盘休眠用的 hdparm（服务端 samba4-server 保留，只是不再有网页面板）。
           FORBIDDEN="
           CONFIG_PACKAGE_luci-theme-openwrt-2020
           CONFIG_PACKAGE_luci-app-attendedsysupgrade
@@ -302,6 +302,9 @@ jobs:
           CONFIG_PACKAGE_irqbalance
           CONFIG_PACKAGE_tailscale
           CONFIG_PACKAGE_luci-app-tailscale-community
+          CONFIG_PACKAGE_luci-app-diskman
+          CONFIG_PACKAGE_luci-app-samba4
+          CONFIG_PACKAGE_hdparm
           "
           EXTRA=0
           for PKG in $FORBIDDEN; do
