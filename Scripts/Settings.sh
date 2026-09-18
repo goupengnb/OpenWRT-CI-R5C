@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2026 VIKINGYFY
 
-#==========LuCI 主题：把 luci-light 依赖的 luci-theme-bootstrap 换成 WRT_THEME==========
+#==========主题：把 luci-light 依赖的 luci-theme-bootstrap 换成 WRT_THEME==========
 COLLECTION_MAKEFILES=$(find ./feeds/luci/collections/ -type f -name "Makefile" 2>/dev/null)
 if [ -n "$COLLECTION_MAKEFILES" ]; then
 	sed -i "s/luci-theme-bootstrap/luci-theme-$WRT_THEME/g" $COLLECTION_MAKEFILES
@@ -10,8 +10,7 @@ else
 	echo "warning: luci collections not found, skip theme patch"
 fi
 
-#==========LuCI 小修补（按官方 25.12 路径；找不到就跳过，不影响编译）==========
-#概览/登录页显示的默认 IP
+#==========LuCI 小修补（找不到就跳过，不影响编译）==========
 FLASH_JS=$(find ./feeds/luci/modules/luci-mod-system/ -type f -name "flash.js" 2>/dev/null)
 if [ -n "$FLASH_JS" ]; then
 	sed -i "s/192\.168\.[0-9]*\.[0-9]*/$WRT_IP/g" $FLASH_JS
@@ -26,9 +25,7 @@ else
 	echo "warning: 10_system.js not found, skip version patch"
 fi
 
-#==========把「带宽监控」从「服务」挪到「网络」==========
-#menu.d 和 view/nlbw/config.js 里的硬编码链接都要改，否则「下载备份」会 404。
-#菜单标题走 i18n，只改路径不丢中文翻译。
+#==========「带宽监控」从「服务」挪到「网络」（menu.d 与 config.js 的硬编码链接都要改）==========
 NLBW_DIR=$(find ./feeds/luci/applications -maxdepth 1 -type d -name "luci-app-nlbwmon" 2>/dev/null)
 if [ -n "$NLBW_DIR" ]; then
 	find "$NLBW_DIR" -type f \( -name "*.json" -o -name "*.js" \) -exec \
@@ -42,10 +39,7 @@ else
 	echo "warning: luci-app-nlbwmon not found, skip menu patch"
 fi
 
-#==========内核小优化：打开 fq 队列（BBR 建议的搭配）==========
-#generic 内核配置里是 "# CONFIG_NET_SCH_FQ is not set"，上游又没有对应的 kmod 包，
-#所以在 rockchip 的 subtarget 内核 config 里补一行（subtarget 后应用，优先级更高）。
-#写成内置 =y，避免编出没有 kmod 收编的模块。
+#==========内核补 fq 队列（BBR 的搭配；上游没有对应的 kmod 包）==========
 for KCONF in ./target/linux/rockchip/config-* ./target/linux/rockchip/*/config-*; do
 	[ -f "$KCONF" ] || continue
 	if grep -q 'CONFIG_NET_SCH_FQ' "$KCONF"; then
@@ -56,9 +50,7 @@ for KCONF in ./target/linux/rockchip/config-* ./target/linux/rockchip/*/config-*
 	fi
 done
 
-#==========默认队列改成 fq（配合 BBR）==========
-#内核默认队列是 fq_codel，不设 sysctl 的话编进去的 fq 没人用。
-#写进 base-files，随固件落到 /etc/sysctl.d/，开机由 /etc/init.d/sysctl 加载。
+#==========默认队列改成 fq（内核默认是 fq_codel，不设 sysctl 的话 fq 没人用）==========
 QDISC_CONF="./package/base-files/files/etc/sysctl.d/13-default-qdisc.conf"
 mkdir -p "$(dirname "$QDISC_CONF")"
 echo 'net.core.default_qdisc=fq' > "$QDISC_CONF"
@@ -87,19 +79,13 @@ else
 	echo "warning: config_generate not found, skip ip/hostname patch"
 fi
 
-#==========R5C：eMMC 剩余空间默认全给 Docker==========
-#官方镜像只分到 boot 64M + rootfs 2048M，32G eMMC 剩下的约 28G 是裸空间，而 Docker 数据目录
-#/opt/docker 默认只能落在 1.9G 的 overlay 上。这个 init 脚本负责：首次开机在剩余空间追加一个
-#ext4 分区（卷标 docker）、格式化并挂到 /opt、写 fstab；之后每次开机按卷标挂载。
-#parted 用 BLKPG ioctl 同步分区表，分区挂载状态下也能立刻生效，不用重启。
+#==========eMMC 剩余空间给 Docker（首次开机追加 ext4 分区挂到 /opt，之后按卷标挂）==========
 DOCKER_STORAGE="./package/base-files/files/etc/init.d/docker-storage"
 mkdir -p "$(dirname "$DOCKER_STORAGE")"
 cat > "$DOCKER_STORAGE" <<'EOF'
 #!/bin/sh /etc/rc.common
-#R5C 专用：把 eMMC 上还没分区的剩余空间给 Docker 用（幂等，可以反复执行）
-#
-#安全边界：只处理承载 rootfs 的那块盘；只在剩余空间 >= 8G 时往后追加分区，从不改动已有分区；
-#已有卷标 docker、或磁盘上已有 >= 3 个分区（手动分过）就直接跳过。
+#R5C 专用：把 eMMC 剩余空间给 Docker 用（幂等）。只动承载 rootfs 的那块盘，
+#只在剩余空间 >= 8G 时往后追加，已有卷标 docker 或已有 3 个分区就跳过。
 
 START=15
 
@@ -142,7 +128,6 @@ disk_of() {
 		/dev/loop*)
 			dev=$(cat "/sys/block/$(basename "$dev")/loop/backing_file" 2>/dev/null)
 			[ -n "$dev" ] || return 1
-			#有的内核在 sysfs 里写的是去掉 /dev 前缀的路径（实测见过 "/vda"）
 			case "$dev" in /dev/*) ;; *) dev="/dev/$dev" ;; esac
 			disk_of "$dev"
 			return $?
@@ -195,7 +180,6 @@ last_partno() {
 		awk -F: 'NR > 2 && $1 ~ /^[0-9]+$/ { n = $1 } END { print n + 0 }'
 }
 
-#输出 "<起始MiB> <大小MiB>"（最后一个 >= MIN_FREE_MIB 的空闲区），没有就什么都不输出
 free_space() {
 	parted -m -s "$DISK" unit MiB print free 2>/dev/null | \
 		awk -F: -v min="$MIN_FREE_MIB" '
@@ -243,9 +227,9 @@ mount_dev() {
 	mkdir -p "$SHAREDIR"
 }
 
-#写一条 fstab，之后开机交给 block-mount 挂（LuCI 的「挂载点」页面里也能看到）
+#写一条 fstab，之后开机交给 block-mount 挂
 write_fstab() {
-	#按「卷标 / 挂载点」判断，不能用「fstab 里已有 mount 段」——自带 fstab 里可能就有段。
+	#按「卷标 / 挂载点」判断，不能用「fstab 里已有 mount 段」
 	uci -q show fstab 2>/dev/null | grep -q "label='$LABEL'" && return 0
 	uci -q show fstab 2>/dev/null | grep -q "target='$TARGET'" && return 0
 	uci -q add fstab mount >/dev/null 2>&1 || return 0
@@ -280,16 +264,12 @@ start() {
 EOF
 chmod 0755 "$DOCKER_STORAGE"
 
-#==========SMB / FTP 开箱可用==========
-#不装 luci-app-samba4 面板（LuCI 里没有共享页面），共享用 uci-defaults 在首次开机建好：
-#name=files → /opt/files（就是 docker-storage 挂上来的那块盘，和 Docker 共用空间）。
-#访客可读写：samba4 模板写死了 invalid users = root，空密码时 dropbear/vsftpd 也登不进；
-#要账号密码就 adduser + smbpasswd -a，再把 guest_ok 关掉（直接改 /etc/config/samba4）。
+#==========SMB / FTP（不装 luci-app-samba4 面板，共享由 uci-defaults 首次开机建好）==========
 FILE_SHARING="./package/base-files/files/etc/uci-defaults/zz-file-sharing"
 mkdir -p "$(dirname "$FILE_SHARING")"
 cat > "$FILE_SHARING" <<'EOF'
 #!/bin/sh
-#第一次开机执行一次：铺好 SMB / FTP 默认值（共享 files → /opt/files，只对内网）。
+#第一次开机执行一次：铺好 SMB / FTP 默认值
 if [ -f /etc/config/samba4 ]; then
 	uci -q get samba4.@sambashare[0] >/dev/null 2>&1 || {
 		uci -q add samba4 sambashare
@@ -307,7 +287,6 @@ if [ -f /etc/config/samba4 ]; then
 	[ -x /etc/init.d/samba4 ] && /etc/init.d/samba4 enable
 fi
 
-#FTP 服务本身（默认值由 Scripts/Handles.sh 写进包里的 /etc/vsftpd.conf）
 [ -x /etc/init.d/vsftpd ] && /etc/init.d/vsftpd enable
 
 mkdir -p /opt/files
@@ -316,9 +295,43 @@ exit 0
 EOF
 chmod 0755 "$FILE_SHARING"
 
-#==========默认 root 密码（可选，靠 R5C.yml 里的 WRT_PW）==========
-#默认留空 = 不设密码，此时 dropbear / vsftpd 会拒绝登录（服务开着也进不去）。
-#填了就把 sha512 哈希写进 base-files 的 /etc/shadow。
+#==========外网访问 SMB / FTP==========
+#WRT_WAN_SHARE 置 false 就只在局域网开放（samba4 也只绑 lan）。
+if [ "$WRT_WAN_SHARE" = "true" ]; then
+	WAN_SHARE="./package/base-files/files/etc/uci-defaults/zz-wan-share"
+	cat > "$WAN_SHARE" <<'EOF'
+#!/bin/sh
+#外网访问 SMB / FTP：samba4 默认 bind interfaces only = yes 且只绑 lan，先放开，
+#再放行 WAN 侧到本机的端口（TCP 445/139、FTP 控制 21 与被动数据口，见 Handles.sh）。
+uci -q set samba4.@samba[0].interface='lan wan'
+uci -q commit samba4
+
+wan_rule() {
+	uci -q show firewall | grep -q "name='$1'" && return 0
+	local sec
+	sec=$(uci add firewall rule) || return 0
+	[ -n "$sec" ] || return 0
+	uci -q set firewall.$sec.name="$1"
+	uci -q set firewall.$sec.src='wan'
+	uci -q set firewall.$sec.proto='tcp'
+	uci -q set firewall.$sec.dest_port="$2"
+	uci -q set firewall.$sec.target='ACCEPT'
+}
+
+wan_rule 'Allow-SMB-WAN' '445 139'
+wan_rule 'Allow-FTP-WAN' '21'
+wan_rule 'Allow-FTP-PASV-WAN' '50000-50010'
+uci -q commit firewall
+
+exit 0
+EOF
+	chmod 0755 "$WAN_SHARE"
+	echo "WAN share: SMB(445/139) + FTP(21, 50000-50010) 已放行，samba4 绑定 lan+wan"
+else
+	echo "WAN share: 已关闭，SMB / FTP 只在局域网可用"
+fi
+
+#==========默认 root 密码（R5C.yml 的 WRT_PW；留空则 SSH / FTP 登不进）==========
 if [ -n "$WRT_PW" ] && [ "$WRT_PW" != "无" ] && [ "$WRT_PW" != "none" ] && [ "$WRT_PW" != "default" ]; then
 	SHADOW_FILE="./package/base-files/files/etc/shadow"
 	if [ -f "$SHADOW_FILE" ] && command -v openssl >/dev/null 2>&1; then
@@ -335,8 +348,7 @@ echo "CONFIG_PACKAGE_luci=y" >> ./.config
 echo "CONFIG_LUCI_LANG_zh_Hans=y" >> ./.config
 echo "CONFIG_PACKAGE_luci-theme-$WRT_THEME=y" >> ./.config
 
-#Ruby YJIT 的处理已随 OpenClash 一起移除（固件里已无包依赖 ruby）；
-#YJIT 检查保留在 R5C.yml 的 Verify Key Packages 里。
+#Ruby YJIT 的检查在 R5C.yml 的 Verify Key Packages 里
 
 #引入私有扩展配置
 if [ -f "$GITHUB_WORKSPACE/Config/PRIVATE.txt" ]; then
@@ -349,7 +361,7 @@ if [ -n "$WRT_PACKAGE" ]; then
 	echo -e "$WRT_PACKAGE" >> ./.config
 fi
 
-#==========修改ssh登录信息==========
+#==========SSH 登录 banner==========
 >package/base-files/files/etc/banner
 echo -e ' ██████╗  ██████╗ ██╗   ██╗██████╗ ███████╗███╗   ██╗ ██████╗ ' >> package/base-files/files/etc/banner
 echo -e '██╔════╝ ██╔═══██╗██║   ██║██╔══██╗██╔════╝████╗  ██║██╔════╝ ' >> package/base-files/files/etc/banner
@@ -358,4 +370,3 @@ echo -e '██║   ██║██║   ██║██║   ██║██�
 echo -e '╚██████╔╝╚██████╔╝╚██████╔╝██║     ███████╗██║ ╚████║╚██████╔╝' >> package/base-files/files/etc/banner
 echo -e ' ╚═════╝  ╚═════╝  ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝ ╚═════╝ \n' >> package/base-files/files/etc/banner
 
-#注：ttyd 免密自动 root 登录的补丁已移除（等于在局域网开 root 后门）。

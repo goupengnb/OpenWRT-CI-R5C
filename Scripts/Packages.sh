@@ -2,11 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2026 VIKINGYFY
 
-#插件来源规则：官方 feeds 里有的用官方的；官方确实没有的才从下面这些第三方仓库拉（只挑仍在维护的）。
-#当前第三方（已在 25.12.5 官方索引里逐个确认不存在）：
-#  luci-theme-shadcn          eamonxg       shadcn/ui 风格侧栏主题
-#  luci-app-homeproxy         immortalwrt   sing-box 内核
-#  luci-app-ddns-go + ddns-go sirpdboy      原作者
+#官方 feeds 里有的用官方的；下面这几个官方确实没有，只从仍在维护的第三方仓库拉。
 
 #替换/新增第三方软件包
 UPDATE_PACKAGE() {
@@ -14,13 +10,13 @@ UPDATE_PACKAGE() {
 	local PKG_REPO=$2
 	local PKG_BRANCH=$3
 	local PKG_SPECIAL=$4
-	local PKG_LIST=("$PKG_NAME" $5)  # 第5个参数为自定义名称列表
+	local PKG_LIST=("$PKG_NAME" $5)
 	local REPO_NAME=${PKG_REPO#*/}
-	local CLONE_DIR="upload-${REPO_NAME}"  # 先克隆到中转目录，避免与目标目录重名时互相覆盖
+	local CLONE_DIR="upload-${REPO_NAME}"  # 先克隆到中转目录，避免同名覆盖
 
 	echo " "
 
-	# 删除 feeds 里可能存在的同名软件包，避免包名冲突
+	#删除 feeds 里可能存在的同名包，避免冲突
 	for NAME in "${PKG_LIST[@]}"; do
 		echo "Search directory: $NAME"
 		local FOUND_DIRS=$(find ../feeds/luci/ ../feeds/packages/ -maxdepth 3 -type d -iname "*$NAME*" 2>/dev/null)
@@ -35,23 +31,20 @@ UPDATE_PACKAGE() {
 		fi
 	done
 
-	# 克隆 GitHub 仓库到中转目录
 	rm -rf "$CLONE_DIR"
 	if ! git clone --depth=1 --single-branch --branch "$PKG_BRANCH" "https://github.com/$PKG_REPO.git" "$CLONE_DIR"; then
 		echo "ERROR: git clone failed: $PKG_REPO ($PKG_BRANCH)"
 		return 1
 	fi
 
-	# 处理克隆下来的仓库
 	if [[ "$PKG_SPECIAL" == "pkg" ]]; then
 		#从大杂烩仓库里提取目标插件目录（-mindepth 1 排除中转目录本身）
 		find "./$CLONE_DIR" -mindepth 1 -maxdepth 3 -type d -iname "*$PKG_NAME*" -prune -exec cp -rf {} ./ \;
 	elif [[ "$PKG_SPECIAL" == "name" ]]; then
-		#把仓库重命名为指定的包名
 		rm -rf "$PKG_NAME"
 		mv -f "$CLONE_DIR" "$PKG_NAME"
 	else
-		#保持仓库原名（仓库根目录本身就是插件）
+		#仓库根目录就是插件本体，保持原名
 		rm -rf "$REPO_NAME"
 		mv -f "$CLONE_DIR" "$REPO_NAME"
 	fi
