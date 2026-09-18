@@ -90,7 +90,9 @@
 - **FTP**：官方 `vsftpd`，用 root + 系统密码登录，登录后锁在 `/opt/files`。
   官方 feed 里没有 FTP 的 LuCI 面板，默认值是 `Scripts/Handles.sh` 直接写进
   `/etc/vsftpd.conf` 的（`local_root` + `allow_writeable_chroot=YES` ——
-  后者是 vsftpd 3.0 起"chroot 目录对登录用户可写"必须显式放行的开关，不加会 500 OOPS）。
+  后者是 vsftpd 3.0 起"chroot 目录对登录用户可写"必须显式放行的开关，不加会 500 OOPS；
+  同时还写了 `seccomp_sandbox=NO` —— 25.12 的 vsftpd 3.0.5 在 6.12 内核上，自带 seccomp 沙箱会让
+  **登录直接 500（child died / priv_sock_get_cmd）**，沙盒里实测关掉它 FTP 才正常，所以默认关）。
 
 # 插件来源
 

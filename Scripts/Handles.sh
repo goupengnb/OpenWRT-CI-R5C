@@ -45,11 +45,19 @@ if [ -n "$VSF_CONF" ]; then
 	else
 		cat >> "$VSF_CONF" <<'EOF'
 
-#以下两行由本仓库的 Scripts/Handles.sh 追加：登录后锁在共享目录，并允许该目录本身可写
+#以下几行由本仓库的 Scripts/Handles.sh 追加：登录后锁在共享目录、允许该目录本身可写、
+#并关掉 vsftpd 自带的 seccomp 沙箱（原因见下）。
 local_root=/opt/files
 allow_writeable_chroot=YES
+
+#seccomp_sandbox=NO：25.12 的官方 vsftpd 3.0.5 在 6.12 内核上，它自带的 seccomp 沙箱会让
+#【登录直接失败】—— 本地实测客户端只收到 500 OOPS: child died / priv_sock_get_cmd，
+#连 FTP 握手都完不成（改成 NO 之后同一个 conf 立刻正常收发）。
+#vsftpd 关掉沙箱后仍有 privsep + chroot，而且这里已经把用户锁死在 /opt/files 里，
+#安全性影响很小 —— FTP 刷完就能用更重要。
+seccomp_sandbox=NO
 EOF
-		echo "vsftpd: 默认 local_root=/opt/files（并允许 chroot 目录可写）"
+		echo "vsftpd: 默认 local_root=/opt/files（允许 chroot 目录可写 + 关闭 seccomp 沙箱）"
 	fi
 else
 	echo "warning: vsftpd package not found, skip conf patch"
