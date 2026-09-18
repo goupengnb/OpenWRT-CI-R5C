@@ -1,7 +1,6 @@
 #===============================================================
-# 友善 NanoPi R5C（FriendlyARM NanoPi R5C / Rockchip RK3568B2）
-# 源码：OpenWrt 官方 https://github.com/openwrt/openwrt.git（openwrt-25.12 分支）
-# 本文件只放【设备 / 内核 / 网卡】相关配置，业务插件统一放在 GENERAL.txt
+# 友善 NanoPi R5C（Rockchip RK3568B2）
+# 源码：OpenWrt 官方 openwrt-25.12；只放【设备 / 内核 / 网卡】，业务插件在 GENERAL.txt
 #===============================================================
 
 #---------- 目标平台与设备（rockchip / armv8，只编译 R5C 一个设备）----------
@@ -12,17 +11,15 @@ CONFIG_TARGET_PER_DEVICE_ROOTFS=y
 CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5c=y
 
 #---------- 镜像格式 ----------
-#squashfs：只读系统 + 可写 overlay，能一键恢复出厂，日常推荐
-#ext4：整分区可写，方便 resize2fs 吃满剩下的 eMMC
+#squashfs：只读系统 + 可写 overlay，可一键恢复出厂；ext4：整分区可写
 CONFIG_TARGET_ROOTFS_SQUASHFS=y
 CONFIG_TARGET_ROOTFS_EXT4FS=y
 CONFIG_TARGET_IMAGES_GZIP=y
 CONFIG_TARGET_ROOTFS_INITRAMFS=n
 
 #---------- 分区大小 ----------
-#官方默认 boot 16M / rootfs 104M，装不下 Docker + AdGuard Home + Samba
-#镜像布局：前 32M 留给 u-boot（idbloader + ITB@8M），然后 boot 64M，rootfs 2048M
-#剩下约 30G 空间留给 eMMC 自行分区（见 README 的存储扩容说明）
+#官方默认 boot 16M / rootfs 104M 装不下 Docker + AdGuard Home。镜像布局：前 32M 给 u-boot
+#（idbloader + ITB@8M），然后 boot 64M、rootfs 2048M，剩下约 30G 留给 eMMC 自行分区
 CONFIG_TARGET_KERNEL_PARTSIZE=64
 CONFIG_TARGET_ROOTFS_PARTSIZE=2048
 
@@ -31,31 +28,23 @@ CONFIG_TARGET_ROOTFS_PARTSIZE=2048
 CONFIG_PACKAGE_kmod-r8169=y
 
 #---------- WiFi（M.2 E-Key / PCIe 插槽）----------
-#你的 R5C 插的是 MT7921（PCIe WiFi6）：驱动 + 固件
+#R5C 插的是 MT7921（PCIe WiFi6）：驱动 + 固件
 CONFIG_PACKAGE_kmod-mt7921e=y
 CONFIG_PACKAGE_kmod-mt7921-firmware=y
 #wpad-openssl：WPA2/WPA3-SAE、802.11r/k/v、OWE、WPS，替换官方默认的 wpad-basic-mbedtls
 CONFIG_PACKAGE_wpad-openssl=y
 # CONFIG_PACKAGE_wpad-basic-mbedtls is not set
 
-#只把 wpad-openssl 选上还不够，必须再加下面这行，否则最后打镜像会失败：
-#  官方 target/linux/rockchip/image/armv8.mk 给 R5C 的 DEVICE_PACKAGES 里【写死】了
-#  wpad-basic-mbedtls，而 DEVICE_PACKAGES 是无条件叠进镜像的，根本不看你选了什么。
-#  两个包都提供 hostapd / wpa-supplicant 这两个虚拟包，apk 会直接拒绝：
-#      ERROR: unable to select packages: ... conflicts: ...
-#  （2026-09-16 那次编译 2 小时后就是栽在这里）
-#官方留了扩展入口：DEVICE_EXTRA_PACKAGES 会接在 DEVICE_PACKAGES 后面做追加/移除，
-#以减号开头表示【移除】该包（实现见 include/image.mk 的 merge_packages）。
-#RTL8822CE 的驱动和固件也在这份 DEVICE_PACKAGES 里，而本机只用 MT7921，
-#所以一并移除（否则光在 .config 里删没用，照样会被塞进镜像）。
+#官方 target/linux/rockchip/image/armv8.mk 给 R5C 的 DEVICE_PACKAGES 写死了 wpad-basic-mbedtls，
+#它无条件叠进镜像、不看 .config，会和 wpad-openssl 冲突（apk 报 conflicts，打镜像时才炸）。
+#用官方 DEVICE_EXTRA_PACKAGES 的减号语法移除；RTL8822CE 的驱动/固件同理（本机只用 MT7921）。
 CONFIG_TARGET_DEVICE_PACKAGES_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5c="-wpad-basic-mbedtls -kmod-rtw88-8822ce -rtl8822ce-firmware"
 
 #---------- 内核 / 网络加速 ----------
 #BBR 拥塞控制（kmod-tcp-bbr 自带 sysctl：tcp_congestion_control=bbr）
 CONFIG_PACKAGE_kmod-tcp-bbr=y
-#BBR 建议搭配 fq 队列。注意：.config 里的 CONFIG_KERNEL_xxx 只对 config/Config-kernel.in
-#里声明过的符号生效，sch_fq 不在其中（写这里会被 make defconfig 丢掉），
-#所以改由 Scripts/Settings.sh 直接给 rockchip 的内核 config 补一行 CONFIG_NET_SCH_FQ=y
+#BBR 要配 fq 队列。.config 里的 CONFIG_KERNEL_xxx 只对 config/Config-kernel.in 声明过的符号生效，
+#sch_fq 不在其中（写这里会被 defconfig 丢掉），由 Scripts/Settings.sh 直接给内核 config 补。
 #容器 / 代理需要的网络组件
 CONFIG_PACKAGE_kmod-veth=y
 CONFIG_PACKAGE_kmod-br-netfilter=y

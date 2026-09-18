@@ -1,16 +1,8 @@
 #===============================================================
 # 通用配置（业务插件）
-#
-# 插件来源规则：
-#   1. OpenWrt 官方 feeds（base / packages / luci / routing）里有的 —— 一律用官方的；
-#   2. 官方 feed 里确实没有的 —— 用原作者仍在维护的第三方仓库（见 Scripts/Packages.sh）。
-#
-# 官方 feed 里不存在的第三方插件（已逐个在 25.12.5 官方索引里确认）：
-#   luci-theme-shadcn                         ← eamonxg（shadcn/ui 风格，持续更新）
-#   luci-app-homeproxy                         ← immortalwrt（ImmortalWrt 官方团队，sing-box 内核）
-#   luci-app-ddns-go + ddns-go                 ← sirpdboy（原作者，持续更新）
-#
-# 本文件里其余插件名都已在 25.12.5 官方索引里逐个核对过
+# 官方 feeds 里有的用官方的；官方没有的用仍在维护的第三方（见 Scripts/Packages.sh）：
+#   luci-theme-shadcn / luci-app-homeproxy / luci-app-ddns-go + ddns-go
+# 其余插件名都已在 25.12.5 官方索引里核对过
 #===============================================================
 
 #---------- 编译全局参数 ----------
@@ -21,25 +13,17 @@ CONFIG_DEVEL=y
 CONFIG_PACKAGE_luci=y
 CONFIG_PACKAGE_luci-ssl=y
 CONFIG_LUCI_LANG_zh_Hans=y
-#主题：shadcn（第三方 eamonxg/luci-theme-shadcn，shadcn/ui 风格的侧栏主题）。
-#  它只依赖 luci-base，没有单独的设置插件；
-#  自带的 uci-defaults 会把 luci.main.mediaurlbase 设成 /luci-static/shadcn，
-#  所以刷完第一次进 LuCI 就是它，不用手动选。
+#shadcn：第三方，只依赖 luci-base、无独立设置插件；自带 uci-defaults 会把
+#luci.main.mediaurlbase 设成 /luci-static/shadcn，刷完首次进 LuCI 就是它
 CONFIG_PACKAGE_luci-theme-shadcn=y
-#注：官方主题（luci-theme-openwrt-2020）和在线升级（attendedsysupgrade + owut）按需求去掉了。
-#    shadcn 是唯一主题，靠 Scripts/Settings.sh 把 luci 集合里的 theme-bootstrap 换成它。
+#shadcn 是唯一主题（Scripts/Settings.sh 把 luci 集合里的 theme-bootstrap 换成它）
 CONFIG_PACKAGE_luci-app-firewall=y
 CONFIG_PACKAGE_luci-app-package-manager=y
 #流量统计 / 带宽监控（菜单由 Scripts/Settings.sh 从「服务」挪到「网络」下）
 CONFIG_PACKAGE_luci-app-nlbwmon=y
 CONFIG_PACKAGE_nlbwmon=y
-#按需求去掉的四个（都已同步进 WRT-CORE.yml 的 FORBIDDEN 反向检查）：
-#  网页终端 luci-app-ttyd、网页文件管理 luci-app-filemanager、自定义命令 luci-app-commands
-#    —— 三个都只是 LuCI 页面（只依赖 luci-base），删掉不影响任何功能；
-#       要进 SSH 用系统的 dropbear（默认就是开的），不必再留一个挂在网页上的终端。
-#    注意 ttyd 这个【二进制】没删：luci-app-dockerman 的 Makefile 写死 +ttyd，
-#    它的容器终端（docker_rpc.uc）就是调 ttyd 实现的，删了 Dockerman 也没法用。
-#  中断均衡 luci-app-irqbalance + irqbalance —— 4 核 A55 上收益很小，还会跟网络软中断抢 CPU。
+#已移除（同步在 R5C.yml 的 FORBIDDEN 里）：网页终端 luci-app-ttyd / 文件管理 luci-app-filemanager /
+#自定义命令 luci-app-commands / irqbalance。注：ttyd 二进制保留 —— dockerman 写死依赖它。
 
 #---------- 系统工具 ----------
 CONFIG_PACKAGE_bash=y
@@ -63,8 +47,7 @@ CONFIG_PACKAGE_zoneinfo-core=y
 CONFIG_PACKAGE_zoneinfo-asia=y
 
 #---------- 存储 / USB ----------
-#ext4 / f2fs 已经内建在 rockchip 内核里（EXT4_FS=y、F2FS_FS=y），不需要 kmod-fs-ext4/f2fs
-#USB3(XHCI/DWC3)、eMMC(MMC_DW)、PCIe、温度传感器同样是内核内建（=y），不需要额外 kmod
+#ext4 / f2fs 以及 USB3、eMMC、PCIe、温度传感器都已内建在 rockchip 内核里，不需要额外 kmod
 CONFIG_PACKAGE_block-mount=y
 CONFIG_PACKAGE_blkid=y
 CONFIG_PACKAGE_lsblk=y
@@ -95,62 +78,45 @@ CONFIG_PACKAGE_kmod-usb-storage-uas=y
 #USB 2.5G 网卡（RTL8152/8153/8156）备用
 CONFIG_PACKAGE_kmod-usb-net-rtl8152=y
 CONFIG_PACKAGE_smartmontools=y
-#按需求去掉的两个：
-#  hdparm —— 磁盘参数/休眠，本机不需要（看盘的健康状态有 smartmontools 就够）；
-#  luci-app-diskman（第三方）—— 官方 feed 里没有磁盘管理面板，按需求也不装这个第三方面板，
-#    分区/格式化直接用 fdisk / parted / mkfs.* 命令行。
+#已移除：hdparm（磁盘休眠）、luci-app-diskman（第三方磁盘面板）；分区用 fdisk / parted / mkfs.*
 
 #---------- DNS（只留 AdGuard Home）----------
-#dnsmasq-full：带 DNSSEC / nftset 的完整版，替换官方默认的精简 dnsmasq。
-#它不是"另一个 DNS 软件"，而是系统的基础解析 + DHCP 服务，
-#AdGuard Home 要挂它的 53 端口做上游，HomeProxy 的分流也要用它，所以必须留着。
+#dnsmasq-full：系统的基础解析 + DHCP（不是「另一个 DNS 软件」），AdGuard Home 挂它的 53 端口做上游，
+#HomeProxy 的分流也要用，必须留着
 CONFIG_PACKAGE_dnsmasq-full=y
 # CONFIG_PACKAGE_dnsmasq is not set
-#AdGuard Home：官方 packages 源的广告过滤面板 + 官方 luci 面板（唯一的 DNS 过滤组件）
+#AdGuard Home：唯一保留的 DNS 过滤组件（官方 packages + 官方 luci 面板）
 CONFIG_PACKAGE_adguardhome=y
 CONFIG_PACKAGE_luci-app-adguardhome=y
-#按需求去掉了 SmartDNS 和 https-dns-proxy：多个 DNS 组件抢 53 端口会互相打架，
-#只留 AdGuard Home 一个，配置反而清楚。
+#已移除 SmartDNS / https-dns-proxy：多个 DNS 组件会抢 53 端口
 
 #---------- 网络服务（只留 ddns-go）----------
-#第三方：ddns-go（官方没有；sirpdboy 维护，支持 Cloudflare / 阿里 / 腾讯等一堆服务商）
-#比官方 ddns-scripts 好用得多，所以官方的 luci-app-ddns / ddns-scripts-* 按需求去掉了。
+#ddns-go：第三方（sirpdboy 维护），支持 Cloudflare / 阿里 / 腾讯等；
+#官方的 luci-app-ddns / ddns-scripts-* 已移除
 CONFIG_PACKAGE_ddns-go=y
 CONFIG_PACKAGE_luci-app-ddns-go=y
-#按需求去掉了 UPnP、网络唤醒（WOL）和 SQM 智能队列。
+#已移除 UPnP / WOL / SQM
 
 #---------- 文件共享（SMB / FTP）----------
-#SMB：只装官方 samba4-server 服务本体，不装 luci-app-samba4 面板（按需求，
-#  所以 LuCI 里不会再有「网络共享」菜单）。共享由 Scripts/Settings.sh 的 uci-defaults
-#  首次开机写好，以后要改直接编辑 /etc/config/samba4。
-#  默认共享 /opt/files（就是 eMMC 剩余空间那块盘，见 Scripts/Settings.sh 的 docker-storage），
-#  访客可读写、只对内网（WAN 由防火墙挡着，没有对外开放）。
-#  注意：官方模板里写死了 invalid users = root，所以 root 不能登录 SMB；
-#  要用账号密码就自己 adduser + smbpasswd -a，再把共享里的"允许访客"关掉。
+#只装 samba4-server 本体，不装 luci-app-samba4 面板（LuCI 里没有「网络共享」菜单）。共享由
+#Scripts/Settings.sh 的 uci-defaults 首次开机写好：/opt/files，访客可读写、只对内网。
+#官方模板写死了 invalid users = root，要账号密码就 adduser + smbpasswd -a 并关掉 guest_ok。
 CONFIG_PACKAGE_samba4-server=y
-#FTP：官方 vsftpd。官方 feed 里没有 FTP 的 LuCI 面板，默认值直接写进 /etc/vsftpd.conf
-#  （见 Scripts/Handles.sh：local_root=/opt/files + allow_writeable_chroot=YES）。
+#vsftpd：官方 feed 没有 FTP 面板，默认值（local_root=/opt/files 等）由 Scripts/Handles.sh 写进包
 CONFIG_PACKAGE_vsftpd=y
 
 #---------- 代理 / 分流 ----------
-#第三方：HomeProxy（官方 feed 没有；ImmortalWrt 官方团队维护，sing-box 内核）
-#它的 Makefile 已经声明了 sing-box / firewall4 / kmod-nft-tproxy / ucode-mod-digest，会自动带进来。
-#界面是 ucode + JS 写的，不需要 luci-compat / luci-lua-runtime（那是 OpenClash 的 Lua 页面才要的）
+#HomeProxy：第三方（ImmortalWrt 官方团队维护，sing-box 内核）。Makefile 已声明 sing-box /
+#firewall4 / kmod-nft-tproxy / ucode-mod-digest，页面是 ucode + JS，不需要 luci-compat
 CONFIG_PACKAGE_luci-app-homeproxy=y
 #sing-box：HomeProxy 的内核，来自【官方 packages feed】（25.12 是 1.13.x）
 CONFIG_PACKAGE_sing-box=y
-#ucode 的 math 模块：HomeProxy 的 generate_client.uc 里写着 import { isnan } from 'math'，
-#它自己的 Makefile 没声明这个依赖，不过 luci-base 本来就依赖 ucode-mod-math（还带 fs/uci/ubus/log/html），
+#ucode-mod-math：HomeProxy 会 import math，显式选上（luci-base 本来也依赖它）
 CONFIG_PACKAGE_ucode-mod-math=y
-#coreutils 的 nohup / timeout：HomeProxy 的 init / 更新脚本会用到这两个命令，
-#官方包没声明这两个依赖，体积很小，显式补上
+#coreutils-nohup / timeout：HomeProxy 的 init / 更新脚本要用，官方包没声明这两个依赖
 CONFIG_PACKAGE_coreutils-nohup=y
 CONFIG_PACKAGE_coreutils-timeout=y
-#按需求去掉了 Tailscale 异地组网（tailscale + luci-app-tailscale-community）：
-#  它是"把自己的设备接进第三方虚拟局域网"，本机不需要；要异地访问内网，
-#  用 HomeProxy 的节点或者 WireGuard 更直接，也少一份常驻进程。
-#按需求去掉了 PBR 策略路由、OpenVPN、WireGuard：代理只留 HomeProxy 一套。
-#（R5C.txt 里的 kmod-wireguard 也一并去掉了，不留没用的内核模块）
+#已移除：Tailscale、PBR、OpenVPN、WireGuard（含 R5C.txt 的 kmod-wireguard），代理只留 HomeProxy
 #透明代理 / 分流需要的内核 nft 扩展
 CONFIG_PACKAGE_kmod-nft-tproxy=y
 CONFIG_PACKAGE_kmod-nft-socket=y

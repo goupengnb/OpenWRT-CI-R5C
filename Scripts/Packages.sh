@@ -2,17 +2,11 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2026 VIKINGYFY
 
-#=============================================================================
-#插件来源规则
-#  1. OpenWrt 官方 feeds（base / packages / luci / routing）里有的插件，一律用官方的；
-#  2. 官方确实没有的，才从第三方仓库拉，且只挑【原作者仍在维护】的仓库；
-#  3. 所有第三方仓库都在下面列出，改版本/换来源只需要改这里的几行。
-#
-#当前需要第三方的插件（官方 25.12.5 索引里逐个确认过，确实不存在）：
-#  luci-theme-shadcn                         eamonxg       shadcn/ui 风格侧栏主题，2026-09 仍在更新
-#  luci-app-homeproxy                         immortalwrt    ImmortalWrt 官方团队，sing-box 内核
-#  luci-app-ddns-go + ddns-go                 sirpdboy       原作者，持续更新
-#=============================================================================
+#插件来源规则：官方 feeds 里有的用官方的；官方确实没有的才从下面这些第三方仓库拉（只挑仍在维护的）。
+#当前第三方（已在 25.12.5 官方索引里逐个确认不存在）：
+#  luci-theme-shadcn          eamonxg       shadcn/ui 风格侧栏主题
+#  luci-app-homeproxy         immortalwrt   sing-box 内核
+#  luci-app-ddns-go + ddns-go sirpdboy      原作者
 
 #替换/新增第三方软件包
 UPDATE_PACKAGE() {
@@ -50,8 +44,7 @@ UPDATE_PACKAGE() {
 
 	# 处理克隆下来的仓库
 	if [[ "$PKG_SPECIAL" == "pkg" ]]; then
-		#从大杂烩仓库里单独提取目标插件目录
-		#-mindepth 1：排除中转目录本身（它的名字里也带目标插件名，会被 -prune 掉导致什么都没提取出来）
+		#从大杂烩仓库里提取目标插件目录（-mindepth 1 排除中转目录本身）
 		find "./$CLONE_DIR" -mindepth 1 -maxdepth 3 -type d -iname "*$PKG_NAME*" -prune -exec cp -rf {} ./ \;
 	elif [[ "$PKG_SPECIAL" == "name" ]]; then
 		#把仓库重命名为指定的包名
@@ -66,18 +59,13 @@ UPDATE_PACKAGE() {
 	rm -rf "$CLONE_DIR"
 }
 
-# 调用格式：
-# UPDATE_PACKAGE "包名" "项目地址" "项目分支" "pkg/name，可选；pkg=从大杂烩仓库里单独提取；name=重命名为包名"
-#
-# 注意：这里只放【官方 feeds 里没有】的插件。
+#调用格式：UPDATE_PACKAGE "包名" "项目地址" "项目分支" "pkg/name"
+#  pkg = 从大杂烩仓库里单独提取该插件；name = 把仓库重命名为包名；留空 = 仓库根目录即包本体
 
-#shadcn 主题（shadcn/ui 风格的侧栏主题；作者 eamonxg，2026-09 仍在更新）
-#仓库根目录就是包本体（luci-theme-shadcn），只依赖 luci-base，不需要额外的设置插件
-#（外观在页面自带的设置项里改，没有独立的 config 插件）。
+#shadcn 主题（作者 eamonxg；仓库根目录就是包本体，只依赖 luci-base）
 UPDATE_PACKAGE "luci-theme-shadcn" "eamonxg/luci-theme-shadcn" "main"
 
-#HomeProxy（sing-box 系代理面板，ImmortalWrt 官方团队维护；仓库根目录就是包本体）
-#内核 sing-box 来自【官方 packages feed】（25.12 是 1.13.x），不需要第三方
+#HomeProxy（ImmortalWrt 官方团队维护；sing-box 内核来自官方 packages feed）
 UPDATE_PACKAGE "homeproxy" "immortalwrt/homeproxy" "master"
 
 #ddns-go（作者 sirpdboy；仓库里含 ddns-go 主程序和 luci-app-ddns-go 两个包）

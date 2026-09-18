@@ -27,11 +27,8 @@ else
 fi
 
 #==========把「带宽监控」从「服务」挪到「网络」==========
-#luci-app-nlbwmon 上游注册的菜单是 admin/services/nlbw（界面上是「服务 → 带宽监控」），
-#这里改成 admin/network/nlbw（「网络 → 带宽监控」）。菜单标题是 JS 框架按英文原文查 i18n
-#（po 里的 msgid 是 "Bandwidth Monitor"），所以只改路径不会丢中文翻译；
-#但 view/nlbw/config.js 里有一处硬编码链接 L.url('admin/services/nlbw/backup')
-#（配置页里的"下载备份"）必须一起改，否则那个链接点进去是 404。
+#menu.d 和 view/nlbw/config.js 里的硬编码链接都要改，否则「下载备份」会 404。
+#菜单标题走 i18n，只改路径不丢中文翻译。
 NLBW_DIR=$(find ./feeds/luci/applications -maxdepth 1 -type d -name "luci-app-nlbwmon" 2>/dev/null)
 if [ -n "$NLBW_DIR" ]; then
 	find "$NLBW_DIR" -type f \( -name "*.json" -o -name "*.js" \) -exec \
@@ -46,10 +43,9 @@ else
 fi
 
 #==========内核小优化：打开 fq 队列（BBR 建议的搭配）==========
-#官方 generic 内核配置里是 "# CONFIG_NET_SCH_FQ is not set"，而 OpenWrt 上游并没有对应的
-#kmod 包（kmod-sched-core 里不含 sch_fq），所以在 rockchip 的内核 config 里补一行。
-#OpenWrt 会用 generic + subtarget 两份 config 合成内核配置，subtarget 这份后应用（优先级更高）。
-#写成内置（=y）而不是模块，避免出现“编出来但没有 kmod 包收编”的模块。
+#generic 内核配置里是 "# CONFIG_NET_SCH_FQ is not set"，上游又没有对应的 kmod 包，
+#所以在 rockchip 的 subtarget 内核 config 里补一行（subtarget 后应用，优先级更高）。
+#写成内置 =y，避免编出没有 kmod 收编的模块。
 for KCONF in ./target/linux/rockchip/config-* ./target/linux/rockchip/*/config-*; do
 	[ -f "$KCONF" ] || continue
 	if grep -q 'CONFIG_NET_SCH_FQ' "$KCONF"; then
@@ -61,9 +57,8 @@ for KCONF in ./target/linux/rockchip/config-* ./target/linux/rockchip/*/config-*
 done
 
 #==========默认队列改成 fq（配合 BBR）==========
-#上面把 fq 队列编进了内核，但 OpenWrt 默认队列是 fq_codel（generic config 里是
-#CONFIG_DEFAULT_FQ_CODEL=y），不设 sysctl 的话编进去的 fq 没人用。
-#写进 base-files，随固件落到 /etc/sysctl.d/，开机由 /etc/init.d/sysctl 统一加载。
+#内核默认队列是 fq_codel，不设 sysctl 的话编进去的 fq 没人用。
+#写进 base-files，随固件落到 /etc/sysctl.d/，开机由 /etc/init.d/sysctl 加载。
 QDISC_CONF="./package/base-files/files/etc/sysctl.d/13-default-qdisc.conf"
 mkdir -p "$(dirname "$QDISC_CONF")"
 echo 'net.core.default_qdisc=fq' > "$QDISC_CONF"
@@ -72,15 +67,12 @@ echo "default qdisc: fq ($QDISC_CONF)"
 #==========无线默认值（首次开机生成 /etc/config/wireless）==========
 WIFI_UC="./package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc"
 if [ -f "$WIFI_UC" ]; then
-	#WIFI名称
+	#WIFI 名称 / 密码 / 加密方式 / 国家代码
 	sed -i "s/ssid='.*'/ssid='$WRT_SSID'/g" $WIFI_UC
-	#WIFI密码
 	sed -i "s/key='.*'/key='$WRT_WORD'/g" $WIFI_UC
-	#加密方式
 	sed -i "s/encryption='.*'/encryption='psk2+ccmp'/g" $WIFI_UC
-	#国家代码
 	sed -i "s/country='.*'/country='CN'/g" $WIFI_UC
-	#R5C 没有板载无线网卡，官方脚本对这类设备默认生成 disabled=1，这里改成开机即启用
+	#R5C 没板载网卡，官方脚本会默认生成 disabled=1，这里改成开机即启用
 	sed -i "s/disabled='.*'/disabled='0'/g" $WIFI_UC
 else
 	echo "warning: mac80211.uc not found, skip wifi defaults"
@@ -96,32 +88,18 @@ else
 fi
 
 #==========R5C：eMMC 剩余空间默认全给 Docker==========
-#官方镜像只分到 boot 64M + rootfs 2048M，32G eMMC 里剩下的约 28G 是"没分区"的裸空间；
-#而 Docker 的数据目录默认是 /opt/docker（包自带的 /etc/config/dockerd 里写死的），
-#不处理的话只能落在 1.9G 的 overlay 上。这里往固件里塞一个 init 脚本，让它：
-#  第一次开机：在剩余空间追加一个 ext4 分区（卷标 docker）→ 格式化 → 挂到 /opt → 写 fstab
-#  以后每次开机：按卷标找到它、检查还没挂就挂上（fstab 也会挂，重复挂载被 is_mounted 挡掉）
-#实现要点（都对着 25.12 的源码/包核对过，不是猜的）：
-#  - parted 3.6 是用 BLKPG ioctl 把新分区同步给内核的（libparted/arch/linux.c 的
-#    _disk_sync_part_table，linux_disk_commit 里调用），所以分区表在有分区挂载的情况下
-#    也能立刻生效，不需要重启；partprobe 只是再补一刀，失败也无所谓；
-#  - block-mount（/sbin/block）认 config mount 的 label/uuid/device/target/fstype/options/enabled
-#    这几个选项（见 fstools 的 block.c：MOUNT_LABEL/UUID/TARGET/ENABLE），所以 fstab 里
-#    按【卷标】挂载就够，不用去解析 UUID；enabled 缺省即启用，这里显式写 1；
-#  - /etc/init.d/ 下的脚本 OpenWrt 打包时会自动 enable（base-files 的 default_postinst：
-#    `"$root/etc/rc.common" "$root$i" enable`），这里再显式 enable 一次只是保险；
-#  - 用到的工具都在固件里：blkid（CONFIG_PACKAGE_blkid）、parted、partprobe、
-#    mkfs.ext4（e2fsprogs），ext4 驱动是内核内建（EXT4_FS=y），不需要额外 kmod。
+#官方镜像只分到 boot 64M + rootfs 2048M，32G eMMC 剩下的约 28G 是裸空间，而 Docker 数据目录
+#/opt/docker 默认只能落在 1.9G 的 overlay 上。这个 init 脚本负责：首次开机在剩余空间追加一个
+#ext4 分区（卷标 docker）、格式化并挂到 /opt、写 fstab；之后每次开机按卷标挂载。
+#parted 用 BLKPG ioctl 同步分区表，分区挂载状态下也能立刻生效，不用重启。
 DOCKER_STORAGE="./package/base-files/files/etc/init.d/docker-storage"
 mkdir -p "$(dirname "$DOCKER_STORAGE")"
 cat > "$DOCKER_STORAGE" <<'EOF'
 #!/bin/sh /etc/rc.common
 #R5C 专用：把 eMMC 上还没分区的剩余空间给 Docker 用（幂等，可以反复执行）
 #
-#安全边界：
-#  - 只处理承载 rootfs 的那块盘（eMMC / SD / USB 都可能是它），其它磁盘一概不碰；
-#  - 只在真的有 >= 8G 未分区空间时才动分区表，且只往后追加，从不修改/删除已有分区；
-#  - 已经建过（卷标 docker 在）或磁盘上已经有 >= 3 个分区（说明自己手动分过了）就直接跳过。
+#安全边界：只处理承载 rootfs 的那块盘；只在剩余空间 >= 8G 时往后追加分区，从不改动已有分区；
+#已有卷标 docker、或磁盘上已有 >= 3 个分区（手动分过）就直接跳过。
 
 START=15
 
@@ -156,9 +134,7 @@ resolve_dev() {
 }
 
 #从设备名推出整盘名：/dev/mmcblk0p2 → /dev/mmcblk0，/dev/sda1 → /dev/sda
-#overlay 是 fstools 的 rootdisk 驱动建的 loop 设备（见 fstools 的 rootdisk.c：
-#它 LOOP_SET_FD + lo_offset 把 rootfs 之后的空闲空间做成 loop），
-#这种设备的 sysfs backing_file 里写着真正的 root 设备，所以顺着它再追一层。
+#overlay 可能是 fstools 建的 loop 设备，顺着 sysfs 的 backing_file 再追一层。
 disk_of() {
 	local dev="$1"
 
@@ -269,9 +245,7 @@ mount_dev() {
 
 #写一条 fstab，之后开机交给 block-mount 挂（LuCI 的「挂载点」页面里也能看到）
 write_fstab() {
-	#注意：不能用「fstab 里已经有 mount 段」当判据 —— 固件自带的 /etc/config/fstab
-	#本来就可能带着 /overlay、/rom 那种 enabled=0 的段，那样会被误判成"已经写过了"。
-	#这里按「卷标 / 挂载点」判断是不是我们自己写的那条。
+	#按「卷标 / 挂载点」判断，不能用「fstab 里已有 mount 段」——自带 fstab 里可能就有段。
 	uci -q show fstab 2>/dev/null | grep -q "label='$LABEL'" && return 0
 	uci -q show fstab 2>/dev/null | grep -q "target='$TARGET'" && return 0
 	uci -q add fstab mount >/dev/null 2>&1 || return 0
@@ -307,22 +281,15 @@ EOF
 chmod 0755 "$DOCKER_STORAGE"
 
 #==========SMB / FTP 开箱可用==========
-#SMB 用官方 samba4-server（按需求不装 luci-app-samba4 面板，LuCI 里没有共享页面），
-#FTP 用官方 vsftpd。
-#samba4 自带的 /etc/config/samba4 里只有一个注释掉的示例共享，这里塞一个 uci-defaults
-#（首次开机由 /etc/init.d/boot 跑一次），把共享 name=files → /opt/files 建出来：
-#  /opt/files 就是 docker-storage 挂上来的那块大盘，所以 SMB/FTP/Docker 共用同一个空间。
-#访客可读写（guest_ok/guest_only=yes + force_root=1）：因为 samba4 的模板里写死了
-#  invalid users = root，root 根本登录不了 SMB；而且刚装好的固件 root 密码是空的，
-#  dropbear / vsftpd 同样会拒绝空密码登录。要账号密码访问就自己 adduser + smbpasswd -a，
-#  再把共享的 guest_ok 关掉（没有 LuCI 面板，直接改 /etc/config/samba4）。
+#不装 luci-app-samba4 面板（LuCI 里没有共享页面），共享用 uci-defaults 在首次开机建好：
+#name=files → /opt/files（就是 docker-storage 挂上来的那块盘，和 Docker 共用空间）。
+#访客可读写：samba4 模板写死了 invalid users = root，空密码时 dropbear/vsftpd 也登不进；
+#要账号密码就 adduser + smbpasswd -a，再把 guest_ok 关掉（直接改 /etc/config/samba4）。
 FILE_SHARING="./package/base-files/files/etc/uci-defaults/zz-file-sharing"
 mkdir -p "$(dirname "$FILE_SHARING")"
 cat > "$FILE_SHARING" <<'EOF'
 #!/bin/sh
-#第一次开机执行一次（恢复出厂后也会再执行）：把 SMB / FTP 的默认值铺好。
-#SMB：共享名 files → /opt/files（eMMC 剩余空间那块盘），访客可读写，只对内网。
-#FTP：vsftpd 用 root + 系统密码登录，登录后锁在 /opt/files（/etc/vsftpd.conf 里配的）。
+#第一次开机执行一次：铺好 SMB / FTP 默认值（共享 files → /opt/files，只对内网）。
 if [ -f /etc/config/samba4 ]; then
 	uci -q get samba4.@sambashare[0] >/dev/null 2>&1 || {
 		uci -q add samba4 sambashare
@@ -340,10 +307,9 @@ if [ -f /etc/config/samba4 ]; then
 	[ -x /etc/init.d/samba4 ] && /etc/init.d/samba4 enable
 fi
 
-#FTP 的服务本身（/etc/vsftpd.conf 里的默认值由 Scripts/Handles.sh 写进包里）
+#FTP 服务本身（默认值由 Scripts/Handles.sh 写进包里的 /etc/vsftpd.conf）
 [ -x /etc/init.d/vsftpd ] && /etc/init.d/vsftpd enable
 
-#共享目录（docker-storage 把大盘挂到 /opt 之后，这个目录就在那块盘上）
 mkdir -p /opt/files
 
 exit 0
@@ -351,11 +317,8 @@ EOF
 chmod 0755 "$FILE_SHARING"
 
 #==========默认 root 密码（可选，靠 R5C.yml 里的 WRT_PW）==========
-#固件默认 root 密码是空的（新机器，第一次进 LuCI 自己设）。空密码时 dropbear 会拒绝
-#一切 SSH 登录、vsftpd 也登不进去 —— 也就是"服务开着但进不去"。所以这里留一个开关：
-#WRT_PW 填的不是 无/空/default 时，就把 base-files 里的 /etc/shadow 改成这个密码
-#（sha512-crypt，musl 的 crypt 认 $6$），开机即可 SSH / FTP 登录。
-#公开仓库里塞一个固定密码等于给所有人留钥匙，所以默认不设。
+#默认留空 = 不设密码，此时 dropbear / vsftpd 会拒绝登录（服务开着也进不去）。
+#填了就把 sha512 哈希写进 base-files 的 /etc/shadow。
 if [ -n "$WRT_PW" ] && [ "$WRT_PW" != "无" ] && [ "$WRT_PW" != "none" ] && [ "$WRT_PW" != "default" ]; then
 	SHADOW_FILE="./package/base-files/files/etc/shadow"
 	if [ -f "$SHADOW_FILE" ] && command -v openssl >/dev/null 2>&1; then
@@ -372,14 +335,8 @@ echo "CONFIG_PACKAGE_luci=y" >> ./.config
 echo "CONFIG_LUCI_LANG_zh_Hans=y" >> ./.config
 echo "CONFIG_PACKAGE_luci-theme-$WRT_THEME=y" >> ./.config
 
-#==========注：Ruby YJIT 那套处理已随 OpenClash 一起移除==========
-#原来这里会写 "# CONFIG_RUBY_ENABLE_YJIT is not set"，并顺手摘掉 feeds 里 ruby 的
-#rust/host 编译依赖。起因只有一个：OpenClash 硬依赖 ruby + ruby-yaml，而官方 feeds 的
-#lang/ruby/Makefile 对 aarch64 默认开 YJIT，会去从源码交叉编译 rust 编译器，
-#实测 3 小时以上都跑不完，最后顶到 GitHub 的 6 小时上限被硬杀。
-#2026-09 移除 OpenClash（改用 HomeProxy + 官方 feed 的 sing-box）后，固件里已经没有任何包
-#依赖 ruby，这段配置一并删除。以后若再引入依赖 ruby 的插件，记得把这套处理加回来
-#（WRT-CORE.yml 的 Verify Key Packages 里留了一道 YJIT 检查，TEST 模式几分钟就能拦下来）。
+#Ruby YJIT 的处理已随 OpenClash 一起移除（固件里已无包依赖 ruby）；
+#YJIT 检查保留在 R5C.yml 的 Verify Key Packages 里。
 
 #引入私有扩展配置
 if [ -f "$GITHUB_WORKSPACE/Config/PRIVATE.txt" ]; then
@@ -401,5 +358,4 @@ echo -e '██║   ██║██║   ██║██║   ██║██�
 echo -e '╚██████╔╝╚██████╔╝╚██████╔╝██║     ███████╗██║ ╚████║╚██████╔╝' >> package/base-files/files/etc/banner
 echo -e ' ╚═════╝  ╚═════╝  ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝ ╚═════╝ \n' >> package/base-files/files/etc/banner
 
-#注：这里原本还会给 ttyd 打补丁改成免密自动 root 登录（/bin/login -f root），
-#    那等于在局域网上开了一个 root 后门，已移除；LuCI 的「终端」页面自带登录鉴权，不受影响。
+#注：ttyd 免密自动 root 登录的补丁已移除（等于在局域网开 root 后门）。
