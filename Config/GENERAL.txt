@@ -6,7 +6,7 @@
 #   2. 官方 feed 里确实没有的 —— 用原作者仍在维护的第三方仓库（见 Scripts/Packages.sh）。
 #
 # 官方 feed 里不存在的第三方插件（已逐个在 25.12.5 官方索引里确认）：
-#   luci-theme-liquid                         ← zzsj0928（Liquid Glass，持续更新）
+#   luci-theme-shadcn                         ← eamonxg（shadcn/ui 风格，持续更新）
 #   luci-app-homeproxy                         ← immortalwrt（ImmortalWrt 官方团队，sing-box 内核）
 #   luci-app-ddns-go + ddns-go                 ← sirpdboy（原作者，持续更新）
 #
@@ -21,13 +21,13 @@ CONFIG_DEVEL=y
 CONFIG_PACKAGE_luci=y
 CONFIG_PACKAGE_luci-ssl=y
 CONFIG_LUCI_LANG_zh_Hans=y
-#主题：Liquid（第三方 zzsj0928/luci-theme-liquid，macOS 液态玻璃风）。
-#  它只依赖 luci-base，没有单独的设置插件（配置写在主题自带的 /etc/config/liquid 里）；
-#  自带的 uci-defaults 会把 luci.main.mediaurlbase 设成 /luci-static/liquid，
+#主题：shadcn（第三方 eamonxg/luci-theme-shadcn，shadcn/ui 风格的侧栏主题）。
+#  它只依赖 luci-base，没有单独的设置插件；
+#  自带的 uci-defaults 会把 luci.main.mediaurlbase 设成 /luci-static/shadcn，
 #  所以刷完第一次进 LuCI 就是它，不用手动选。
-CONFIG_PACKAGE_luci-theme-liquid=y
+CONFIG_PACKAGE_luci-theme-shadcn=y
 #注：官方主题（luci-theme-openwrt-2020）和在线升级（attendedsysupgrade + owut）按需求去掉了。
-#    Liquid 是唯一主题，靠 Scripts/Settings.sh 把 luci 集合里的 theme-bootstrap 换成它。
+#    shadcn 是唯一主题，靠 Scripts/Settings.sh 把 luci 集合里的 theme-bootstrap 换成它。
 CONFIG_PACKAGE_luci-app-firewall=y
 CONFIG_PACKAGE_luci-app-package-manager=y
 #流量统计 / 带宽监控（菜单由 Scripts/Settings.sh 从「服务」挪到「网络」下）

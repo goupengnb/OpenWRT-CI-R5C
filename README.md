@@ -41,12 +41,11 @@
   - 注意：root 密码为空时 dropbear / vsftpd 会**拒绝登录**（服务开着但进不去）。
     要"刷完就能 SSH / FTP 登录"，把 `R5C.yml` 里的 `WRT_PW` 从 `无` 改成一个密码再重编一次，
     `Scripts/Settings.sh` 会用它生成 sha512-crypt 哈希写进 `/etc/shadow`。
-- 默认主题：**Liquid**（第三方 [zzsj0928/luci-theme-liquid](https://github.com/zzsj0928/luci-theme-liquid)，
-  macOS 液态玻璃风；主题包自带 uci-defaults 会把 `luci.main.mediaurlbase` 设成 `/luci-static/liquid`）。
-  官方主题已按需求移除，Liquid 是唯一主题（靠 `Scripts/Settings.sh` 把 luci 集合里的
+- 默认主题：**shadcn**（第三方 [eamonxg/luci-theme-shadcn](https://github.com/eamonxg/luci-theme-shadcn)，
+  shadcn/ui 风格的侧栏主题；主题包自带 uci-defaults 会把 `luci.main.mediaurlbase` 设成 `/luci-static/shadcn`）。
+  官方主题已按需求移除，shadcn 是唯一主题（靠 `Scripts/Settings.sh` 把 luci 集合里的
   `luci-theme-bootstrap` 换成它，否则 luci-light 会把 bootstrap 一起拖进来）。
-  亮/暗/跟随系统、5 套主题色（可自定义 hex）、壁纸（含 Bing 每日图）都在页面右上角那个控件里切，
-  配置存在 `/etc/config/liquid`，换浏览器/设备也保留。
+  自带亮/暗切换，外观设置就在页面里，不需要额外的设置插件。
 
 # 刷机方法
 
@@ -103,7 +102,7 @@
 
 | 插件 | 来源仓库 | 分支 | 说明 |
 | --- | --- | --- | --- |
-| `luci-theme-liquid` | [zzsj0928/luci-theme-liquid](https://github.com/zzsj0928/luci-theme-liquid) | `main` | 官方 feed 无；macOS 液态玻璃风，2026-08 仍在更新（0.7-r19，作者 CI 同时出 ipk/apk）；只依赖 `luci-base`，设置项在主题自带的 `/etc/config/liquid` 里，不需要额外的设置插件 |
+| `luci-theme-shadcn` | [eamonxg/luci-theme-shadcn](https://github.com/eamonxg/luci-theme-shadcn) | `main` | 官方 feed 无；shadcn/ui 风格侧栏主题，2026-09 仍在更新（0.5.11，作者 CI 同时出 ipk/apk）；只依赖 `luci-base`，不需要额外的设置插件 |
 | `luci-app-homeproxy` | [immortalwrt/homeproxy](https://github.com/immortalwrt/homeproxy) | `master` | 官方 feed 无；ImmortalWrt 官方团队维护；内核是**官方 feed 里的 `sing-box`**（25.12 是 1.13.x），固件里不带任何第三方二进制 |
 | `luci-app-ddns-go`、`ddns-go` | [sirpdboy/luci-app-ddns-go](https://github.com/sirpdboy/luci-app-ddns-go) | `main` | 官方 feed 无；原作者仍在维护 |
 
@@ -119,7 +118,7 @@ PBR/OpenVPN/WireGuard、网页终端页面（luci-app-ttyd）、网页文件管�
 Tailscale、第三方 DiskMan 磁盘管理面板、SMB 的 LuCI 面板（luci-app-samba4）。
 下面列的是保留下来的：
 
-- **LuCI**：`luci`、`luci-ssl`(HTTPS)、简体中文、**Liquid 主题（第三方，唯一主题，不需要额外设置插件）**、`luci-app-firewall`、`luci-app-package-manager`、`luci-app-nlbwmon`（流量统计，菜单被挪到**网络 → 带宽监控**）
+- **LuCI**：`luci`、`luci-ssl`(HTTPS)、简体中文、**shadcn 主题（第三方，唯一主题，不需要额外设置插件）**、`luci-app-firewall`、`luci-app-package-manager`、`luci-app-nlbwmon`（流量统计，菜单被挪到**网络 → 带宽监控**）
 - **系统工具**：bash、nano、htop、curl、wget-ssl、rsync、ca-certificates、openssl-util、ip-full、ethtool、pciutils（lspci 看 M.2 网卡）、usbutils、iperf3、tcpdump、openssh-keygen、openssh-sftp-server、zoneinfo-core/asia
 - **存储 / USB**：block-mount、blkid、lsblk、fdisk、sfdisk、parted、e2fsprogs、dosfstools、f2fs-tools、btrfs-progs、wipefs、xfs-mkfs、swap-utils、kmod-fs-vfat/exfat/ntfs3/btrfs/cifs、cifsmount、exfat-mkfs/fsck、kmod-usb-storage(+uas)、kmod-usb-net-rtl8152（USB 2.5G 网卡）、smartmontools
 - **DNS**：`dnsmasq-full`（系统基础解析 + DHCP，唯一对外解析器）、AdGuard Home（`adguardhome` + `luci-app-adguardhome`，**官方源版本**）
@@ -181,7 +180,7 @@ HomeProxy 的 DNS 是 sing-box 内置的（默认用 nft 把 53 劫持到 `infra
 | --- | --- | --- |
 | 源码 | immortalwrt（`immortalwrt/immortalwrt` master） | **OpenWrt 官方** `openwrt/openwrt` 的 `openwrt-25.12` 分支 |
 | 编译目标 | 整个 rockchip/armv8 平台 | 只编译 `friendlyarm_nanopi-r5c` |
-| 主题 | Argon（sbwml 的 fork） | **Liquid**（zzsj0928，macOS 液态玻璃）；Argon 按需求换掉 |
+| 主题 | Argon（sbwml 的 fork） | **shadcn**（eamonxg，shadcn/ui 风格侧栏）；Argon / Liquid 按需求换掉 |
 | 代理 / 分流 | OpenClash（vernesong `dev`，自带 mihomo 内核） | **HomeProxy**（immortalwrt `master`），内核换成官方 feed 里的 `sing-box` |
 | AdGuardHome | 魔改版 `goupengnb/luci-app-adguardhome` | 官方 `adguardhome` + `luci-app-adguardhome` |
 | DiskMan 磁盘管理面板 | sbwml fork | 按需求**移除**（官方 feed 没有此面板；分区/格式化用 `fdisk` / `parted` / `mkfs.*`） |
@@ -194,7 +193,7 @@ HomeProxy 的 DNS 是 sing-box 内置的（默认用 nft 把 53 劫持到 `infra
 | 第三方包版本更新脚本（`UPDATE_VERSION`，靠 sed 改 Makefile 版本号） | 启用 | **已删除**（容易把包改坏，交给上游自己更新） |
 | ttyd 免密 root 登录补丁 | 有 | **移除**（等于局域网 root 后门） |
 | Ruby YJIT（会连带从源码编译 rust 编译器） | 默认打开，单这一步就 3 小时以上，最后被 6 小时上限硬杀 | **已随 OpenClash 一起消失**（固件里不再有依赖 ruby 的包），只在 TEST 阶段留了一道拦截 |
-| 第三方主题兜底 | 装了 `luci-theme-openwrt-2020` | 按需求移除，Liquid 是唯一主题 |
+| 第三方主题兜底 | 装了 `luci-theme-openwrt-2020` | 按需求移除，shadcn 是唯一主题 |
 | 网卡驱动 | RTL8822CE + MT7921 两套 | 只留 MT7921（用设备包移除机制摘掉 RTL8822CE） |
 | 网页终端页面 / 文件管理 / 自定义命令 / 中断均衡 | 都装了 | 按需求移除（都只是 LuCI 页面，删掉不影响功能；要 SSH 用系统的 dropbear）。注意 `ttyd` 二进制**留着**：`luci-app-dockerman` 的 Makefile 里是 `+ttyd`，容器终端靠它 |
 | Tailscale 异地组网 | 装了 | 按需求移除 |
@@ -271,7 +270,7 @@ CONFIG_TARGET_DEVICE_PACKAGES_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5c="-wpa
 - `Scripts/Settings.sh` —— 系统级修改与默认值：主题、默认主机名/IP、默认 WiFi、内核 `sch_fq`、
   带宽监控菜单挪到「网络」、`/etc/init.d/docker-storage`（eMMC 剩余空间 → `/opt` → Docker）、
   SMB/FTP 的 uci-defaults、可选的默认 root 密码（`WRT_PW`）
-- `Scripts/Packages.sh` —— 从第三方仓库拉取**官方 feed 里没有**的插件（liquid 主题 / HomeProxy / ddns-go）
+- `Scripts/Packages.sh` —— 从第三方仓库拉取**官方 feed 里没有**的插件（shadcn 主题 / HomeProxy / ddns-go）
 - `Scripts/Handles.sh` —— 改第三方包自带文件的默认值：往 HomeProxy 包里塞
   `/etc/uci-defaults/zz-homeproxy-lan-proxy`（首次开机把 `lan_proxy_mode` 设成 `except_listed`）、
   给 vsftpd 的 `/etc/vsftpd.conf` 追加 `local_root=/opt/files` + `allow_writeable_chroot=YES`
